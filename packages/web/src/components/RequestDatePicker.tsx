@@ -1,5 +1,5 @@
 import { Alert, Group, Stack, Text, Tooltip } from "@mantine/core";
-import { DatePickerInput, type DateValue } from "@mantine/dates";
+import { DatePickerInput } from "@mantine/dates";
 import { useMediaQuery } from "@mantine/hooks";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Temporal } from "@js-temporal/polyfill";
@@ -8,7 +8,7 @@ import { AlertTriangle, CalendarDays } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
-import { findRequestConflict, formatPortalDate, formatPortalDateRange, formatPortalDateWithWeekday, isScheduledWorkday } from "../request-calendar";
+import { findRequestConflict, formatPortalDate, formatPortalDateRange, formatPortalDateWithWeekday, isScheduledWorkday, toDateOnlyString } from "../request-calendar";
 
 interface RequestDatePickerProps {
   kind: "FERIE" | "PERMESSO";
@@ -44,15 +44,6 @@ function yearRange(date: string) {
 
 function metadataUrl(from: string, to: string) {
   return `/request-calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-}
-
-function pickerDateString(value: DateValue): string | null {
-  if (typeof value === "string" || value === null) return value;
-  return Temporal.PlainDate.from({
-    year: value.getFullYear(),
-    month: value.getMonth() + 1,
-    day: value.getDate(),
-  }).toString();
 }
 
 export function RequestDatePicker({ kind, startDate, endDate, schedule, revisionOfId, onChange }: RequestDatePickerProps) {
@@ -219,7 +210,7 @@ export function RequestDatePicker({ kind, startDate, endDate, schedule, revision
       placeholder={t("calendarChoosePeriod")}
       value={[startDate || null, endDate || null]}
       valueFormatter={({ date, locale: formatterLocale, labelSeparator }) => Array.isArray(date)
-        ? formatPortalDateRange(pickerDateString(date[0]), pickerDateString(date[1]), formatterLocale, labelSeparator)
+        ? formatPortalDateRange(toDateOnlyString(date[0]), toDateOnlyString(date[1]), formatterLocale, labelSeparator)
         : ""}
       onChange={(value) => { void handleRangeChange(value); }}
       allowSingleDateInRange

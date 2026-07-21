@@ -4,6 +4,7 @@ import { Cloud, Database, Mail, RefreshCw, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { api } from "../api";
+import { formatPortalDateTime } from "../request-calendar";
 
 interface Health { directory: { configured: boolean; lastSync: { status: string; startedAt: string; employeeCount: number; errorCode?: string } | null }; auth0: { configured: boolean; mode: string }; email: { configured: boolean; pending: number }; imports: { rejected: number } }
 
@@ -13,7 +14,7 @@ export function Integrations() {
   const health = useQuery({ queryKey: ["integrations"], queryFn: () => api<Health>("/it/integrations"), refetchInterval: 60_000 });
   const sync = useMutation({ mutationFn: () => api("/it/directory-sync", { method: "POST" }), onSuccess: async () => { toast.success(i18n.language === "en" ? "ED sync completed" : "Sincronizzazione ED completata"); await queryClient.invalidateQueries({ queryKey: ["integrations"] }); }, onError: (error: Error) => toast.error(error.message) });
   const tiles = health.data ? [
-    { title: "Employee Directory", icon: Database, ok: health.data.directory.lastSync?.status === "SUCCEEDED", detail: health.data.directory.lastSync ? `${health.data.directory.lastSync.employeeCount} ${i18n.language === "en" ? "employees" : "dipendenti"} · ${new Date(health.data.directory.lastSync.startedAt).toLocaleString(i18n.language)}` : health.data.directory.configured ? (i18n.language === "en" ? "Not synchronized" : "Non sincronizzato") : (i18n.language === "en" ? "Not configured" : "Non configurato") },
+    { title: "Employee Directory", icon: Database, ok: health.data.directory.lastSync?.status === "SUCCEEDED", detail: health.data.directory.lastSync ? `${health.data.directory.lastSync.employeeCount} ${i18n.language === "en" ? "employees" : "dipendenti"} · ${formatPortalDateTime(health.data.directory.lastSync.startedAt, i18n.language)}` : health.data.directory.configured ? (i18n.language === "en" ? "Not synchronized" : "Non sincronizzato") : (i18n.language === "en" ? "Not configured" : "Non configurato") },
     { title: "Auth0", icon: Shield, ok: health.data.auth0.configured || health.data.auth0.mode === "demo", detail: health.data.auth0.mode === "demo" ? "Demo authentication" : "JWT + current ED authorization" },
     { title: "AWS SES", icon: Mail, ok: health.data.email.configured, detail: `${health.data.email.pending} ${i18n.language === "en" ? "pending notifications" : "notifiche in attesa"}` },
     { title: "Zucchetti", icon: Cloud, ok: health.data.imports.rejected === 0, detail: `${health.data.imports.rejected} ${i18n.language === "en" ? "rejected batches" : "importazioni rifiutate"}` },

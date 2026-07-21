@@ -6,10 +6,10 @@ The 2026-2028 discipline provides the legal baseline for vacation, suppressed-ho
 
 - [2026-2028 employment discipline](https://www.fpcgil.it/wp-content/uploads/2026/03/Disciplina-Ambasciate-triennio-2026-28.pdf)
 - [Italian working-time law](https://www.lavoro.gov.it/sites/default/files/documenti-e-norme/normative/Documents/2003/20030408_DLGS_66.pdf)
-- [October 4 national holiday](https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=25G00153&atto.dataPubblicazioneGazzetta=2025-10-10&tipoDettaglio=multivigenza)
+- [04 October 2026 national holiday](https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=25G00153&atto.dataPubblicazioneGazzetta=2025-10-10&tipoDettaglio=multivigenza)
 - [Florence patron-saint observance](https://cultura.comune.fi.it/tradizioni-popolari/festivita-fiorentine/offerta-dei-ceri)
 
-Good Friday is seeded as a centre closure at Easter minus two days. Easter Monday is a national holiday at Easter plus one day. October 4 is effective from 2026. These are database rules with effective dates and audited administrator overrides; they are not embedded in request handlers.
+Good Friday is seeded as a centre closure at Easter minus two days. Easter Monday is a national holiday at Easter plus one day. The 04 October holiday is enabled from 04 October 2026 onward. These are database rules with effective dates and audited administrator overrides; they are not embedded in request handlers.
 
 ## Privacy
 

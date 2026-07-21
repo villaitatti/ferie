@@ -25,7 +25,7 @@ pnpm dev
 
 Open `http://localhost:5173`. Development defaults to demo authentication. The profile menu switches between staff, pre-approver, department head, HR/final approver, and IT identities.
 
-The seeded schedule is Monday-Friday, 09:00-13:00 and 13:30-17:00. Seed balances are authoritative imports as of 2026-06-30. Do not use demo authentication in production.
+The seeded schedule is Monday-Friday, 09:00-13:00 and 13:30-17:00. Seed balances are authoritative imports as of 30 June 2026. Do not use demo authentication in production.
 
 ## Production configuration
 

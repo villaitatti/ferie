@@ -2,7 +2,7 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
-## [0.1.0] - 2026-07-21
+## [0.1.0] - 21 July 2026
 
 ### Added
 
@@ -15,5 +15,9 @@ All notable changes to the Ferie Portal are documented in this file.
 - HR-managed date-only entries for sickness, Legge 104, and parental leave.
 - Notification outbox processing with pg-boss and AWS SES/MJML support.
 - Docker Compose deployment and Cloudflare Tunnel integration configuration.
+
+### Changed
+
+- Standardized human-readable dates as `DD MMMM YYYY`, with localized month names.
 
 [0.1.0]: https://github.com/villaitatti/ferie/releases/tag/v0.1.0

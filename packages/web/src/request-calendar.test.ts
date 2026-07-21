@@ -1,6 +1,6 @@
 import type { RequestCalendarDay, WorkInterval } from "@ferie/shared";
 import { describe, expect, it } from "vitest";
-import { findRequestConflict, formatPortalDate, formatPortalDateRange, formatPortalDateWithWeekday, formatPortalList, isScheduledWorkday } from "./request-calendar";
+import { findRequestConflict, formatPortalDate, formatPortalDateRange, formatPortalDateTime, formatPortalDateWithWeekday, formatPortalList, isScheduledWorkday } from "./request-calendar";
 
 const schedule: WorkInterval[] = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: "09:00", end: "17:00" }));
 
@@ -21,6 +21,7 @@ describe("request calendar selection helpers", () => {
   it("formats date-only values with translated month names", () => {
     expect(formatPortalDate("2026-03-01", "en")).toBe("01 March 2026");
     expect(formatPortalDate("2026-03-01", "it")).toBe("01 marzo 2026");
+    expect(formatPortalDateTime("2026-03-02T13:45:00Z", "en")).toBe("02 March 2026 at 14:45");
   });
 
   it("collapses a one-day range to a single localized date", () => {

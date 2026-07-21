@@ -9,6 +9,26 @@ export function formatPortalDate(date: string, language: string): string {
   });
 }
 
+export function formatPortalDateTime(timestamp: string, language: string): string {
+  return Temporal.Instant.from(timestamp).toZonedDateTimeISO("Europe/Rome").toLocaleString(language === "en" ? "en-GB" : "it-IT", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+}
+
+export function toDateOnlyString(value: string | Date | null): string | null {
+  if (typeof value === "string" || value === null) return value;
+  return Temporal.PlainDate.from({
+    year: value.getFullYear(),
+    month: value.getMonth() + 1,
+    day: value.getDate(),
+  }).toString();
+}
+
 export function formatPortalDateWithWeekday(date: string, language: string): string {
   return Temporal.PlainDate.from(date).toLocaleString(language === "en" ? "en-GB" : "it-IT", {
     weekday: "long",
