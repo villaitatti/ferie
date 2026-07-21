@@ -29,7 +29,7 @@ The seeded schedule is Monday-Friday, 09:00-13:00 and 13:30-17:00. Seed balances
 
 ## Production configuration
 
-Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
+Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. The server refuses to start in production with demo authentication or incomplete Auth0 JWT configuration. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
 
 Run migrations before starting a new image:
 

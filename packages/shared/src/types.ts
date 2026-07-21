@@ -48,6 +48,7 @@ export interface BalanceSummary {
   approvedFuture: number;
   pending: number;
   projected: number | null;
+  available: number | null;
   asOf: string | null;
   stale: boolean;
 }

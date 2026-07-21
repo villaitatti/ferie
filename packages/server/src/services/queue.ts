@@ -29,10 +29,11 @@ async function queue(): Promise<PgBoss> {
   return bossPromise;
 }
 
-export async function enqueueNotification(requestId: string, recipient: string, template: string) {
+export async function enqueueNotification(requestId: string, recipient: string, template: string, dedupeDiscriminator?: string) {
+  const dedupeKey = [requestId, recipient, template, dedupeDiscriminator].filter(Boolean).join(":");
   const outbox = await prisma.notificationOutbox.upsert({
-    where: { dedupeKey: `${requestId}:${recipient}:${template}` },
-    create: { dedupeKey: `${requestId}:${recipient}:${template}`, recipient, template, payload: { requestId } },
+    where: { dedupeKey },
+    create: { dedupeKey, recipient, template, payload: { requestId } },
     update: {},
   });
   try {

@@ -22,17 +22,17 @@ interface AllocationFieldProps {
 function AllocationField({ balance, fallbackLabel, value, onChange }: AllocationFieldProps) {
   const { t, i18n } = useTranslation();
   const allocation = typeof value === "number" ? value : Number(value) || 0;
-  const remaining = balance?.projected === null || balance?.projected === undefined
+  const remaining = balance?.available === null || balance?.available === undefined
     ? null
-    : balance.projected - allocation;
+    : balance.available - allocation;
   const label = balance ? (i18n.language === "en" ? balance.labelEn : balance.labelIt) : fallbackLabel;
 
   return <div className="allocation-field">
     <Group justify="space-between" align="baseline" gap="xs" wrap="wrap">
       <Text fw={700}>{label}</Text>
-      {balance?.projected === null || balance?.projected === undefined
+      {balance?.available === null || balance?.available === undefined
         ? <Text size="sm" c="orange" fw={600}>{t("noBalance")}</Text>
-        : <Text size="sm" c={balance.stale ? "orange" : "green.8"} fw={700}>{t("available")}: <Quantity amount={balance.projected} unit={balance.unit} /></Text>}
+        : <Text size="sm" c={balance.stale ? "orange" : "green.8"} fw={700}>{t("available")}: <Quantity amount={balance.available} unit={balance.unit} /></Text>}
     </Group>
     <NumberInput
       mt="sm"

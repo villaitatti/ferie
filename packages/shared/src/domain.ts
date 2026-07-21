@@ -15,6 +15,17 @@ export interface VacationCalculation {
   quantityDays: number;
 }
 
+export function calculateBalanceAvailability(
+  imported: number | null,
+  adjustments: number,
+  approvedFuture: number,
+  pending: number,
+): { projected: number | null; available: number | null } {
+  if (imported === null) return { projected: null, available: null };
+  const projected = imported + adjustments - approvedFuture;
+  return { projected, available: projected - pending };
+}
+
 export function easterSunday(year: number): Temporal.PlainDate {
   const a = year % 19;
   const b = Math.floor(year / 100);
@@ -103,10 +114,28 @@ export function validatePermissionInterval(date: string, startTime: string, endT
   const weekday = Temporal.PlainDate.from(date).dayOfWeek;
   const start = toMinutes(startTime);
   const end = toMinutes(endTime);
-  const duration = minutesBetween(startTime, endTime);
-  const covered = schedule.some((interval) => interval.weekday === weekday && start >= toMinutes(interval.start) && end <= toMinutes(interval.end));
-  if (!covered) throw new Error("OUTSIDE_WORK_SCHEDULE");
-  return duration;
+  minutesBetween(startTime, endTime);
+  const intervals = schedule
+    .filter((interval) => interval.weekday === weekday)
+    .map((interval) => ({ start: toMinutes(interval.start), end: toMinutes(interval.end) }))
+    .filter((interval) => interval.end > interval.start)
+    .sort((left, right) => left.start - right.start);
+  const startIsScheduled = intervals.some((interval) => start >= interval.start && start < interval.end);
+  const endIsScheduled = intervals.some((interval) => end > interval.start && end <= interval.end);
+  if (!startIsScheduled || !endIsScheduled) throw new Error("OUTSIDE_WORK_SCHEDULE");
+
+  let coveredMinutes = 0;
+  let coveredUntil = start;
+  for (const interval of intervals) {
+    const overlapStart = Math.max(start, interval.start, coveredUntil);
+    const overlapEnd = Math.min(end, interval.end);
+    if (overlapEnd > overlapStart) {
+      coveredMinutes += overlapEnd - overlapStart;
+      coveredUntil = overlapEnd;
+    }
+  }
+  if (coveredMinutes === 0) throw new Error("OUTSIDE_WORK_SCHEDULE");
+  return coveredMinutes;
 }
 
 export function allocationsEqualDays(allocations: Array<{ amount: number }>, days: number): boolean {

@@ -23,6 +23,42 @@ const employeeSchema = z.object({
 const pageSchema = z.object({ items: z.array(employeeSchema), nextCursor: z.string().nullable().optional() });
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
+type PendingStage = "NORMAL" | "FINAL";
+interface PendingRecipientSet {
+  requestId: string;
+  stage: PendingStage;
+  recipients: string[];
+}
+
+export function newlyAssignedRecipients(previous: string[], current: string[]): string[] {
+  const previousSet = new Set(previous);
+  return [...new Set(current)].filter((recipient) => !previousSet.has(recipient)).sort();
+}
+
+async function pendingRecipientSets(): Promise<Map<string, PendingRecipientSet>> {
+  const [normalPending, finalPending, finalApprovers] = await Promise.all([
+    prisma.absenceRequest.findMany({
+      where: { status: { in: ["PENDING_APPROVAL", "CANCELLATION_REQUESTED"] } },
+      include: { employee: { include: { subjects: { include: { approver: true } } } } },
+    }),
+    prisma.absenceRequest.findMany({ where: { status: "PENDING_FINAL_APPROVAL" }, select: { id: true } }),
+    prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true } }),
+  ]);
+  const result = new Map<string, PendingRecipientSet>();
+  for (const request of normalPending) {
+    const preApprovers = request.employee.subjects.filter((assignment) => assignment.role === "PRE_APPROVER");
+    const assignments = preApprovers.length ? preApprovers : request.employee.subjects.filter((assignment) => assignment.role === "RESPONSABILE");
+    const entry = { requestId: request.id, stage: "NORMAL" as const, recipients: [...new Set(assignments.map((assignment) => assignment.approver.email))].sort() };
+    result.set(`${entry.stage}:${entry.requestId}`, entry);
+  }
+  const finalRecipients = [...new Set(finalApprovers.map((approver) => approver.email))].sort();
+  for (const request of finalPending) {
+    const entry = { requestId: request.id, stage: "FINAL" as const, recipients: finalRecipients };
+    result.set(`${entry.stage}:${entry.requestId}`, entry);
+  }
+  return result;
+}
+
 async function token(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
   const response = await fetch(`https://${config.AUTH0_DOMAIN}/oauth/token`, {
@@ -53,6 +89,7 @@ export async function syncDirectory() {
       cursor = page.nextCursor ?? undefined;
     } while (cursor);
 
+    const recipientsBefore = await pendingRecipientSets();
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
         const department = await tx.departmentMirror.upsert({
@@ -79,20 +116,15 @@ export async function syncDirectory() {
         }
       }
     });
-    const pending = await prisma.absenceRequest.findMany({
-      where: { status: { in: ["PENDING_APPROVAL", "CANCELLATION_REQUESTED"] } },
-      include: { employee: { include: { subjects: { include: { approver: true } } } } },
-    });
-    for (const request of pending) {
-      const preApprovers = request.employee.subjects.filter((assignment) => assignment.role === "PRE_APPROVER");
-      const assignments = preApprovers.length ? preApprovers : request.employee.subjects.filter((assignment) => assignment.role === "RESPONSABILE");
-      for (const recipient of new Set(assignments.map((assignment) => assignment.approver.email))) await enqueueNotification(request.id, recipient, "APPROVAL_REASSIGNED");
+    const recipientsAfter = await pendingRecipientSets();
+    for (const [key, previous] of recipientsBefore) {
+      const current = recipientsAfter.get(key);
+      if (!current) continue;
+      const template = current.stage === "FINAL" ? "FINAL_APPROVAL_REASSIGNED" : "APPROVAL_REASSIGNED";
+      for (const recipient of newlyAssignedRecipients(previous.recipients, current.recipients)) {
+        await enqueueNotification(current.requestId, recipient, template, run.id);
+      }
     }
-    const [finalPending, finalApprovers] = await Promise.all([
-      prisma.absenceRequest.findMany({ where: { status: "PENDING_FINAL_APPROVAL" }, select: { id: true } }),
-      prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true } }),
-    ]);
-    for (const request of finalPending) for (const final of finalApprovers) await enqueueNotification(request.id, final.email, "FINAL_APPROVAL_REASSIGNED");
     await prisma.directorySyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", employeeCount: items.length, finishedAt: new Date() } });
     return { runId: run.id, employeeCount: items.length };
   } catch (error) {

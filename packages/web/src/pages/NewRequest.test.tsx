@@ -34,8 +34,8 @@ const preview: PreviewResponse = {
   segments: ["03", "04", "05", "06", "07"].map((day) => ({ date: `2026-08-${day}`, quantity: 1 })),
   allocations: [],
   balances: [
-    { code: "FERIE", labelIt: "Ferie", labelEn: "Annual leave", unit: "DAYS", imported: 18, approvedFuture: 2, pending: 0, projected: 16, asOf: "2026-06-30", stale: false },
-    { code: "EX_FESTIVITA", labelIt: "Ex festività", labelEn: "Former public holidays", unit: "DAYS", imported: 4, approvedFuture: 0, pending: 0, projected: 4, asOf: "2026-06-30", stale: false },
+    { code: "FERIE", labelIt: "Ferie", labelEn: "Annual leave", unit: "DAYS", imported: 18, approvedFuture: 2, pending: 0, projected: 16, available: 16, asOf: "2026-06-30", stale: false },
+    { code: "EX_FESTIVITA", labelIt: "Ex festività", labelEn: "Former public holidays", unit: "DAYS", imported: 4, approvedFuture: 0, pending: 0, projected: 4, available: 4, asOf: "2026-06-30", stale: false },
   ],
   overBalance: false,
 };

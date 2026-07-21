@@ -19,5 +19,14 @@ All notable changes to the Ferie Portal are documented in this file.
 ### Changed
 
 - Standardized human-readable dates as `DD MMMM YYYY`, with localized month names.
+- Pending requests now reserve balance availability while the approved-only projection remains visible separately.
+- Hourly permission requests can span unpaid schedule breaks and deduct only scheduled working minutes.
+
+### Fixed
+
+- Serialized employee request writes to prevent concurrent overlap and balance double-spend races.
+- Added optimistic status guards for withdrawals, cancellations, approvals, and revision-parent transitions.
+- Limited directory reassignment notifications to recipients added by an actual approver change.
+- Refused demo authentication in production, required complete Auth0 JWT configuration, and mapped JWT failures to HTTP 401.
 
 [0.1.0]: https://github.com/villaitatti/ferie/releases/tag/v0.1.0

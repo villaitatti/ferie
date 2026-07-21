@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import type { Request } from "express";
-import type { HolidayRule, Prisma } from "@prisma/client";
+import { Prisma, type HolidayRule } from "@prisma/client";
 import {
   allocationsEqualDays,
   balanceAdjustmentSchema,
   balanceImportSchema,
+  calculateBalanceAvailability,
   calculateVacationDays,
   decisionSchema,
   easterSunday,
@@ -28,6 +29,7 @@ import { audit } from "./audit.js";
 import { enqueueNotification } from "./queue.js";
 
 const activeStatuses = ["PENDING_APPROVAL", "PENDING_FINAL_APPROVAL", "APPROVED", "CHANGE_REQUESTED", "CANCELLATION_REQUESTED"] as const;
+type PortalDb = typeof prisma | Prisma.TransactionClient;
 
 export function dbDate(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -101,22 +103,22 @@ async function countPendingApprovals(employeeId: string, roles: string[]): Promi
   });
 }
 
-export async function getBalanceSummaries(employeeId: string): Promise<BalanceSummary[]> {
-  const accounts = await prisma.balanceAccount.findMany({ where: { active: true }, orderBy: { code: "asc" } });
+async function getBalanceDetails(employeeId: string, db: PortalDb) {
+  const accounts = await db.balanceAccount.findMany({ where: { active: true }, orderBy: { code: "asc" } });
   return Promise.all(accounts.map(async (account) => {
-    const snapshot = await prisma.balanceSnapshot.findFirst({
+    const snapshot = await db.balanceSnapshot.findFirst({
       where: { employeeId, accountId: account.id },
       orderBy: [{ asOf: "desc" }, { createdAt: "desc" }],
     });
     const futureWhere = snapshot ? { gt: snapshot.cutoffDate } : { gte: dbDate(new Date().toISOString().slice(0, 10)) };
-    const [allocations, adjustmentAggregate] = await Promise.all([prisma.requestBalanceAllocation.findMany({
+    const [allocations, adjustmentAggregate] = await Promise.all([db.requestBalanceAllocation.findMany({
       where: {
         accountId: account.id,
         reversedAt: null,
         request: { employeeId, startDate: futureWhere },
       },
-      include: { request: { select: { status: true } } },
-    }), prisma.manualBalanceAdjustment.aggregate({
+      include: { request: { select: { id: true, status: true, createdAt: true } } },
+    }), db.manualBalanceAdjustment.aggregate({
       where: { employeeId, accountId: account.id, ...(snapshot ? { effectiveDate: { gt: snapshot.cutoffDate } } : {}) },
       _sum: { amount: true },
     })]);
@@ -124,8 +126,9 @@ export async function getBalanceSummaries(employeeId: string): Promise<BalanceSu
     const pending = allocations.filter((entry) => entry.request.status === "PENDING_APPROVAL" || entry.request.status === "PENDING_FINAL_APPROVAL").reduce((sum, entry) => sum + number(entry.amount), 0);
     const imported = snapshot ? number(snapshot.amount) : null;
     const adjustments = adjustmentAggregate._sum.amount ? number(adjustmentAggregate._sum.amount) : 0;
+    const availability = calculateBalanceAvailability(imported, adjustments, approvedFuture, pending);
     const age = snapshot ? Math.floor((Date.now() - snapshot.asOf.getTime()) / 86_400_000) : Infinity;
-    return {
+    const summary: BalanceSummary = {
       code: account.code,
       labelIt: account.labelIt,
       labelEn: account.labelEn,
@@ -133,20 +136,31 @@ export async function getBalanceSummaries(employeeId: string): Promise<BalanceSu
       imported,
       approvedFuture,
       pending,
-      projected: imported === null ? null : imported + adjustments - approvedFuture,
+      projected: availability.projected,
+      available: availability.available,
       asOf: snapshot ? isoDate(snapshot.asOf) : null,
       stale: age > 45,
+    };
+    return {
+      summary,
+      pendingReservations: allocations
+        .filter((entry) => entry.request.status === "PENDING_APPROVAL" || entry.request.status === "PENDING_FINAL_APPROVAL")
+        .map((entry) => ({ requestId: entry.request.id, createdAt: entry.request.createdAt, amount: number(entry.amount) })),
     };
   }));
 }
 
-async function effectiveHolidayOccurrences(startDate: string, endDate: string) {
-  const rules = await prisma.holidayRule.findMany({ where: { active: true } });
+export async function getBalanceSummaries(employeeId: string, db: PortalDb = prisma): Promise<BalanceSummary[]> {
+  return (await getBalanceDetails(employeeId, db)).map((entry) => entry.summary);
+}
+
+async function effectiveHolidayOccurrences(startDate: string, endDate: string, db: PortalDb = prisma) {
+  const rules = await db.holidayRule.findMany({ where: { active: true } });
   return expandHolidayRules(rules, startDate, endDate);
 }
 
-async function effectiveHolidayDates(startDate: string, endDate: string): Promise<Set<string>> {
-  return new Set((await effectiveHolidayOccurrences(startDate, endDate)).map((entry) => entry.date));
+async function effectiveHolidayDates(startDate: string, endDate: string, db: PortalDb = prisma): Promise<Set<string>> {
+  return new Set((await effectiveHolidayOccurrences(startDate, endDate, db)).map((entry) => entry.date));
 }
 
 type EffectiveHolidayRule = Pick<HolidayRule, "code" | "labelIt" | "labelEn" | "kind" | "recurrence" | "month" | "day" | "easterOffset" | "oneOffDate" | "effectiveFrom" | "effectiveTo" | "active">;
@@ -228,8 +242,12 @@ async function findEmployeeForInput(request: Request, employeeId?: string) {
   return target;
 }
 
-async function checkOverlap(employeeId: string, input: RequestPreviewInput, excludeRequestId?: string) {
-  const candidates = await prisma.absenceRequest.findMany({
+async function lockEmployeeRequests(tx: Prisma.TransactionClient, employeeId: string) {
+  await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${employeeId}, 0))`);
+}
+
+async function checkOverlap(db: PortalDb, employeeId: string, input: RequestPreviewInput, excludeRequestId?: string) {
+  const candidates = await db.absenceRequest.findMany({
     where: {
       employeeId,
       id: excludeRequestId ? { not: excludeRequestId } : undefined,
@@ -252,12 +270,16 @@ async function checkOverlap(employeeId: string, input: RequestPreviewInput, excl
   if (overlaps) throw new HttpError(409, "OVERLAPPING_REQUEST");
 }
 
-export async function previewRequest(request: Request, raw: unknown) {
-  const input = requestPreviewSchema.parse(raw);
-  const employee = await findEmployeeForInput(request, input.employeeId);
+type RequestEmployee = Awaited<ReturnType<typeof findEmployeeForInput>>;
+
+async function calculateRequestPreview(
+  employee: RequestEmployee,
+  input: RequestPreviewInput,
+  excludeRequestId: string | undefined,
+  db: PortalDb,
+) {
   if (employee.status !== "ACTIVE") throw new HttpError(409, "EMPLOYEE_INACTIVE");
-  const excludeRequestId = typeof raw === "object" && raw !== null && "revisionOfId" in raw && typeof raw.revisionOfId === "string" ? raw.revisionOfId : undefined;
-  await checkOverlap(employee.id, input, excludeRequestId);
+  await checkOverlap(db, employee.id, input, excludeRequestId);
   const schedule = employee.schedule as unknown as WorkInterval[];
   let quantity: number;
   let unit: "DAYS" | "MINUTES";
@@ -266,7 +288,7 @@ export async function previewRequest(request: Request, raw: unknown) {
 
   if (input.absenceTypeCode === "PERMESSO") {
     if (input.startDate !== input.endDate) throw new HttpError(400, "PERMISSION_MUST_BE_ONE_DAY");
-    const holidays = await effectiveHolidayDates(input.startDate, input.endDate);
+    const holidays = await effectiveHolidayDates(input.startDate, input.endDate, db);
     if (holidays.has(input.startDate)) throw new HttpError(400, "NON_WORKING_DAY");
     try { quantity = validatePermissionInterval(input.startDate, input.startTime, input.endTime, schedule); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "INVALID_TIME_INTERVAL"); }
@@ -274,7 +296,7 @@ export async function previewRequest(request: Request, raw: unknown) {
     segments = [{ date: input.startDate, quantity }];
     allocations = [{ accountCode: "PERMESSO", amount: quantity }];
   } else {
-    const holidayOccurrences = await effectiveHolidayOccurrences(input.startDate, input.endDate);
+    const holidayOccurrences = await effectiveHolidayOccurrences(input.startDate, input.endDate, db);
     const holidays = new Set(holidayOccurrences.map((entry) => entry.date));
     const holidaysByDate = new Map<string, RequestCalendarHoliday[]>();
     for (const { date, ...holiday } of holidayOccurrences) {
@@ -301,17 +323,24 @@ export async function previewRequest(request: Request, raw: unknown) {
     }
   }
 
-  const balances = await getBalanceSummaries(employee.id);
+  const balances = await getBalanceSummaries(employee.id, db);
   const replacementCredits = new Map<string, number>();
   if (excludeRequestId) {
-    const replaced = await prisma.requestBalanceAllocation.findMany({ where: { requestId: excludeRequestId, reversedAt: null }, include: { account: true } });
+    const replaced = await db.requestBalanceAllocation.findMany({ where: { requestId: excludeRequestId, reversedAt: null }, include: { account: true } });
     replaced.forEach((allocation) => replacementCredits.set(allocation.account.code, number(allocation.amount)));
   }
   const overBalance = allocations.some((allocation) => {
     const balance = balances.find((entry) => entry.code === allocation.accountCode);
-    return balance?.projected !== null && balance?.projected !== undefined && balance.projected + (replacementCredits.get(allocation.accountCode) ?? 0) - allocation.amount < 0;
+    return balance?.available !== null && balance?.available !== undefined && balance.available + (replacementCredits.get(allocation.accountCode) ?? 0) - allocation.amount < 0;
   });
   return { input, employeeId: employee.id, quantity, unit, segments, allocations, balances, overBalance };
+}
+
+export async function previewRequest(request: Request, raw: unknown) {
+  const input = requestPreviewSchema.parse(raw);
+  const employee = await findEmployeeForInput(request, input.employeeId);
+  const excludeRequestId = typeof raw === "object" && raw !== null && "revisionOfId" in raw && typeof raw.revisionOfId === "string" ? raw.revisionOfId : undefined;
+  return calculateRequestPreview(employee, input, excludeRequestId, prisma);
 }
 
 async function approverRecipients(employeeId: string): Promise<string[]> {
@@ -326,16 +355,21 @@ async function approverRecipients(employeeId: string): Promise<string[]> {
 
 export async function submitRequest(request: Request, raw: unknown) {
   const input = submitRequestSchema.parse(raw);
-  const preview = await previewRequest(request, input);
-  if (input.absenceTypeCode === "FERIE" && preview.allocations.length === 0) throw new HttpError(400, "BALANCE_ALLOCATION_REQUIRED");
-  const employee = await prisma.employeeMirror.findUniqueOrThrow({ where: { id: preview.employeeId }, include: { department: true } });
-  const absenceType = await prisma.absenceType.findUnique({ where: { code: input.absenceTypeCode } });
-  if (!absenceType || !absenceType.active) throw new HttpError(400, "ABSENCE_TYPE_DISABLED");
-  if (absenceType.entryMode === "ADMIN_ONLY") throw new HttpError(403, "ADMIN_ENTRY_REQUIRED");
-  const parent = input.revisionOfId ? await getRequest(input.revisionOfId) : null;
-  if (parent && (parent.employeeId !== employee.id || parent.status !== "APPROVED")) throw new HttpError(409, "REVISION_SOURCE_NOT_APPROVED");
+  const authorizedEmployee = await findEmployeeForInput(request, input.employeeId);
 
   const created = await prisma.$transaction(async (tx) => {
+    await lockEmployeeRequests(tx, authorizedEmployee.id);
+    const employee = await tx.employeeMirror.findUnique({ where: { id: authorizedEmployee.id }, include: { department: true } });
+    if (!employee) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
+    const parent = input.revisionOfId ? await tx.absenceRequest.findUnique({ where: { id: input.revisionOfId } }) : null;
+    if (input.revisionOfId && (!parent || parent.employeeId !== employee.id || parent.status !== "APPROVED")) {
+      throw new HttpError(409, "REVISION_SOURCE_NOT_APPROVED");
+    }
+    const preview = await calculateRequestPreview(employee, input, input.revisionOfId, tx);
+    if (input.absenceTypeCode === "FERIE" && preview.allocations.length === 0) throw new HttpError(400, "BALANCE_ALLOCATION_REQUIRED");
+    const absenceType = await tx.absenceType.findUnique({ where: { code: input.absenceTypeCode } });
+    if (!absenceType || !absenceType.active) throw new HttpError(400, "ABSENCE_TYPE_DISABLED");
+    if (absenceType.entryMode === "ADMIN_ONLY") throw new HttpError(403, "ADMIN_ENTRY_REQUIRED");
     if (parent) {
       const changed = await tx.absenceRequest.updateMany({ where: { id: parent.id, status: "APPROVED" }, data: { status: "CHANGE_REQUESTED" } });
       if (changed.count !== 1) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
@@ -378,12 +412,12 @@ export async function submitRequest(request: Request, raw: unknown) {
     return result;
   });
   await audit(request, "REQUEST_SUBMITTED", "AbsenceRequest", created.id, { status: created.status, overBalance: created.overBalance });
-  for (const recipient of await approverRecipients(employee.id)) await enqueueNotification(created.id, recipient, "APPROVAL_REQUIRED");
+  for (const recipient of await approverRecipients(authorizedEmployee.id)) await enqueueNotification(created.id, recipient, "APPROVAL_REQUIRED");
   return serializeRequest(await getRequest(created.id));
 }
 
-async function getRequest(id: string) {
-  const result = await prisma.absenceRequest.findUnique({
+async function getRequest(id: string, db: PortalDb = prisma) {
+  const result = await db.absenceRequest.findUnique({
     where: { id },
     include: { employee: { include: { department: true } }, absenceType: true, allocations: { include: { account: true } }, segments: true, decisions: { orderBy: { createdAt: "asc" } } },
   });
@@ -449,63 +483,79 @@ export async function decideRequest(request: Request, id: string, raw: unknown) 
     const assigned = await prisma.approverAssignment.count({ where: { employeeId: existing.employeeId, approverId: actor.id } });
     if (assigned === 0) throw new HttpError(403, "CURRENT_APPROVER_REQUIRED");
   }
-  const cancellation = existing.status === "CANCELLATION_REQUESTED";
-  const exceedsNow = !cancellation && await requestWouldExceedBalance(existing.id);
-  if (exceedsNow && !existing.overBalance) await prisma.absenceRequest.update({ where: { id }, data: { overBalance: true } });
-  let toStatus;
-  try {
-    toStatus = resolveDecisionTransition({ status: existing.status, action: input.action, overBalance: existing.overBalance || exceedsNow, isFinalApprover: actor.roles.includes("FERIE_FINAL_APPROVER") });
-  } catch (error) {
-    const code = error instanceof Error ? error.message : "DECISION_NOT_ALLOWED";
-    throw new HttpError(code === "OVER_BALANCE_REQUIRES_ESCALATION" ? 409 : 400, code);
-  }
-  const updated = await prisma.$transaction(async (tx) => {
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockEmployeeRequests(tx, existing.employeeId);
+    const current = await getRequest(id, tx);
+    if (current.status !== input.expectedStatus) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
+    const cancellation = current.status === "CANCELLATION_REQUESTED";
+    const exceedsNow = !cancellation && await requestWouldExceedBalance(current.id, tx);
+    let toStatus;
+    try {
+      toStatus = resolveDecisionTransition({ status: current.status, action: input.action, overBalance: current.overBalance || exceedsNow, isFinalApprover: actor.roles.includes("FERIE_FINAL_APPROVER") });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "DECISION_NOT_ALLOWED";
+      throw new HttpError(code === "OVER_BALANCE_REQUIRES_ESCALATION" ? 409 : 400, code);
+    }
     const changed = await tx.absenceRequest.updateMany({
       where: { id, status: input.expectedStatus },
-      data: { status: toStatus, resolvedAt: toStatus === "APPROVED" || toStatus === "DECLINED" ? new Date() : null },
+      data: { status: toStatus, overBalance: current.overBalance || exceedsNow, resolvedAt: toStatus === "APPROVED" || toStatus === "DECLINED" ? new Date() : null },
     });
     if (changed.count !== 1) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
-    await tx.approvalAction.create({ data: { requestId: id, actorSubject: actor.auth0Subject, actorName: actor.displayName, action: input.action, fromStatus: existing.status, toStatus, comment: input.comment } });
+    await tx.approvalAction.create({ data: { requestId: id, actorSubject: actor.auth0Subject, actorName: actor.displayName, action: input.action, fromStatus: current.status, toStatus, comment: input.comment } });
     if (toStatus === "CANCELLED") await tx.requestBalanceAllocation.updateMany({ where: { requestId: id, reversedAt: null }, data: { reversedAt: new Date() } });
-    if (existing.parentRequestId && (toStatus === "APPROVED" || toStatus === "DECLINED")) {
+    if (current.parentRequestId && (toStatus === "APPROVED" || toStatus === "DECLINED")) {
       const parentStatus = toStatus === "APPROVED" ? "CANCELLED" : "APPROVED";
-      await tx.absenceRequest.update({ where: { id: existing.parentRequestId }, data: { status: parentStatus, resolvedAt: toStatus === "APPROVED" ? new Date() : undefined } });
-      if (toStatus === "APPROVED") await tx.requestBalanceAllocation.updateMany({ where: { requestId: existing.parentRequestId, reversedAt: null }, data: { reversedAt: new Date() } });
+      const parentChanged = await tx.absenceRequest.updateMany({ where: { id: current.parentRequestId, status: "CHANGE_REQUESTED" }, data: { status: parentStatus, resolvedAt: toStatus === "APPROVED" ? new Date() : undefined } });
+      if (parentChanged.count !== 1) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
+      if (toStatus === "APPROVED") await tx.requestBalanceAllocation.updateMany({ where: { requestId: current.parentRequestId, reversedAt: null }, data: { reversedAt: new Date() } });
     }
-    return tx.absenceRequest.findUniqueOrThrow({ where: { id } });
+    const updated = await tx.absenceRequest.findUniqueOrThrow({ where: { id } });
+    return { updated, toStatus, fromStatus: current.status };
   });
-  await audit(request, `REQUEST_${input.action}`, "AbsenceRequest", id, { from: existing.status, to: toStatus });
-  if (toStatus === "PENDING_FINAL_APPROVAL") {
+  await audit(request, `REQUEST_${input.action}`, "AbsenceRequest", id, { from: outcome.fromStatus, to: outcome.toStatus });
+  if (outcome.toStatus === "PENDING_FINAL_APPROVAL") {
     const finals = await prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true } });
     for (const final of finals) await enqueueNotification(id, final.email, "FINAL_APPROVAL_REQUIRED");
-  } else await enqueueNotification(id, existing.employee.email, `REQUEST_${toStatus}`);
-  return serializeRequest(await getRequest(updated.id));
+  } else await enqueueNotification(id, existing.employee.email, `REQUEST_${outcome.toStatus}`);
+  return serializeRequest(await getRequest(outcome.updated.id));
 }
 
 export async function withdrawOrCancel(request: Request, id: string) {
   const actor = await actorEmployee(request);
   const existing = await getRequest(id);
   if (existing.employeeId !== actor.id && !actor.roles.includes("FERIE_PORTAL_ADMIN")) throw new HttpError(403, "REQUEST_OWNER_REQUIRED");
-  let toStatus: "WITHDRAWN" | "CANCELLATION_REQUESTED";
-  if (existing.status === "PENDING_APPROVAL" || existing.status === "PENDING_FINAL_APPROVAL") toStatus = "WITHDRAWN";
-  else if (existing.status === "APPROVED") toStatus = "CANCELLATION_REQUESTED";
-  else throw new HttpError(409, "REQUEST_CANNOT_BE_WITHDRAWN");
-  await prisma.absenceRequest.update({ where: { id }, data: { status: toStatus } });
-  if (toStatus === "WITHDRAWN" && existing.parentRequestId) await prisma.absenceRequest.update({ where: { id: existing.parentRequestId }, data: { status: "APPROVED" } });
-  await prisma.approvalAction.create({ data: { requestId: id, actorSubject: actor.auth0Subject, actorName: actor.displayName, action: toStatus === "WITHDRAWN" ? "WITHDRAW" : "REQUEST_CANCELLATION", fromStatus: existing.status, toStatus } });
+  const toStatus = await prisma.$transaction(async (tx) => {
+    await lockEmployeeRequests(tx, existing.employeeId);
+    const current = await getRequest(id, tx);
+    let nextStatus: "WITHDRAWN" | "CANCELLATION_REQUESTED";
+    if (current.status === "PENDING_APPROVAL" || current.status === "PENDING_FINAL_APPROVAL") nextStatus = "WITHDRAWN";
+    else if (current.status === "APPROVED") nextStatus = "CANCELLATION_REQUESTED";
+    else throw new HttpError(409, "REQUEST_CANNOT_BE_WITHDRAWN");
+    const changed = await tx.absenceRequest.updateMany({ where: { id, status: existing.status }, data: { status: nextStatus } });
+    if (changed.count !== 1) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
+    if (nextStatus === "WITHDRAWN" && current.parentRequestId) {
+      const parentChanged = await tx.absenceRequest.updateMany({ where: { id: current.parentRequestId, status: "CHANGE_REQUESTED" }, data: { status: "APPROVED" } });
+      if (parentChanged.count !== 1) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
+    }
+    await tx.approvalAction.create({ data: { requestId: id, actorSubject: actor.auth0Subject, actorName: actor.displayName, action: nextStatus === "WITHDRAWN" ? "WITHDRAW" : "REQUEST_CANCELLATION", fromStatus: current.status, toStatus: nextStatus } });
+    return nextStatus;
+  });
   await audit(request, toStatus, "AbsenceRequest", id);
   if (toStatus === "CANCELLATION_REQUESTED") for (const recipient of await approverRecipients(existing.employeeId)) await enqueueNotification(id, recipient, "CANCELLATION_APPROVAL_REQUIRED");
   return serializeRequest(await getRequest(id));
 }
 
-async function requestWouldExceedBalance(requestId: string): Promise<boolean> {
-  const entry = await prisma.absenceRequest.findUniqueOrThrow({ where: { id: requestId }, include: { allocations: { include: { account: true } } } });
-  const balances = await getBalanceSummaries(entry.employeeId);
-  const parentAllocations = entry.parentRequestId ? await prisma.requestBalanceAllocation.findMany({ where: { requestId: entry.parentRequestId, reversedAt: null }, include: { account: true } }) : [];
+async function requestWouldExceedBalance(requestId: string, db: PortalDb = prisma): Promise<boolean> {
+  const entry = await db.absenceRequest.findUniqueOrThrow({ where: { id: requestId }, include: { allocations: { include: { account: true } } } });
+  const balances = await getBalanceDetails(entry.employeeId, db);
+  const parentAllocations = entry.parentRequestId ? await db.requestBalanceAllocation.findMany({ where: { requestId: entry.parentRequestId, reversedAt: null }, include: { account: true } }) : [];
   return entry.allocations.some((allocation) => {
-    const balance = balances.find((item) => item.code === allocation.account.code);
+    const balance = balances.find((item) => item.summary.code === allocation.account.code);
     const replacementCredit = parentAllocations.filter((item) => item.account.code === allocation.account.code).reduce((sum, item) => sum + number(item.amount), 0);
-    return balance?.projected !== null && balance?.projected !== undefined && balance.projected + replacementCredit - number(allocation.amount) < 0;
+    const laterReservations = balance?.pendingReservations
+      .filter((reservation) => reservation.createdAt > entry.createdAt || (reservation.createdAt.getTime() === entry.createdAt.getTime() && reservation.requestId > entry.id))
+      .reduce((sum, reservation) => sum + reservation.amount, 0) ?? 0;
+    return balance?.summary.available !== null && balance?.summary.available !== undefined && balance.summary.available + laterReservations + replacementCredit < 0;
   });
 }
 
