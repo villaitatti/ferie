@@ -30,6 +30,7 @@ All notable changes to the Ferie Portal are documented in this file.
 - Validated custom holiday rules and protected seeded national, local, and centre rules from administrative overwrite.
 - Kept all authorized administration and integration destinations reachable from mobile navigation.
 - Removed the production PostgreSQL host-port binding; the database is accessible only on the internal container network.
+- Redacted absence and administration routes, query strings, credentials, and raw protected-route errors from technical HTTP logs.
 - Limited directory reassignment notifications to recipients added by an actual approver change.
 - Refused demo authentication in production, required complete Auth0 JWT configuration, and mapped JWT failures to HTTP 401.
 

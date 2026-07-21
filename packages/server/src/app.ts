@@ -9,13 +9,18 @@ import { logger } from "./lib/logger.js";
 import { authMiddleware, extractActor } from "./middleware/auth.js";
 import { api } from "./routes.js";
 import { errorHandler } from "./lib/http.js";
+import { serializeHttpRequest, serializeHttpResponse } from "./lib/http-logging.js";
 
 export function createApp() {
   const app = express();
   app.set("trust proxy", 1);
   app.use(helmet());
   app.use(cors({ origin: config.WEB_ORIGIN, credentials: true }));
-  app.use(pinoHttp({ logger }));
+  app.use(pinoHttp({
+    logger,
+    wrapSerializers: false,
+    serializers: { req: serializeHttpRequest, res: serializeHttpResponse },
+  }));
   app.use(express.json({ limit: "1mb" }));
   app.get("/api/health", (_request, response) => response.json({ status: "ok", service: "ferie-portal" }));
   app.use("/api", rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: "draft-7", legacyHeaders: false }), authMiddleware, extractActor, api);

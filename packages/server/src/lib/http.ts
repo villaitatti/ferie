@@ -1,6 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
+import { protectedLogPrefix, sanitizeLogUrl, technicalErrorDescriptor } from "./http-logging.js";
 
 export class HttpError extends Error {
   constructor(public status: number, public code: string, message = code) {
@@ -17,6 +18,9 @@ export function errorHandler(error: unknown, request: Request, response: Respons
   if (typeof error === "object" && error !== null && "name" in error && error.name === "UnauthorizedError") {
     return response.status(401).json({ code: "UNAUTHORIZED" });
   }
-  logger.error({ err: error, path: request.path }, "Unhandled request error");
+  const requestUrl = request.originalUrl || request.url;
+  const path = sanitizeLogUrl(requestUrl);
+  if (protectedLogPrefix(requestUrl)) logger.error({ error: technicalErrorDescriptor(error), path }, "Unhandled request error");
+  else logger.error({ err: error, path }, "Unhandled request error");
   return response.status(500).json({ code: "INTERNAL_ERROR" });
 }

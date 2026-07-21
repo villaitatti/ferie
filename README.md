@@ -35,6 +35,8 @@ Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a s
 
 Production PostgreSQL is reachable only from the Compose `internal` network. Port `5433` is published by `docker-compose.dev.yml` for local development only.
 
+HTTP technical logs exclude request and response bodies, credentials, cookies, query strings, and identifying subpaths for request, calendar, approval, and administration endpoints. Detailed absence access remains in the application audit log rather than infrastructure logs.
+
 Run migrations before starting a new image:
 
 ```bash
