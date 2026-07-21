@@ -27,6 +27,8 @@ Open `http://localhost:5173`. Development defaults to demo authentication. The p
 
 The seeded schedule is Monday-Friday, 09:00-13:00 and 13:30-17:00. Seed balances are authoritative imports as of 30 June 2026. Do not use demo authentication in production.
 
+Day-based absences follow the employee's ED schedule: each scheduled working date counts as one day regardless of FTE. FTE is mirrored and snapshotted for context and audit, but does not prorate request quantities or imported entitlements. Hourly permissions deduct only minutes covered by ED work intervals, so HR must maintain the actual working days and intervals for part-time employees in ED.
+
 Normal approval is a single peer decision, not a pre-approver-to-responsabile chain. All configured pre-approvers are notified, or all responsabili when no pre-approver exists; either group and any configured substitute may decide, while substitutes are not part of the default notification audience.
 
 ## Production configuration
@@ -37,11 +39,10 @@ Production PostgreSQL is reachable only from the Compose `internal` network. Por
 
 HTTP technical logs exclude request and response bodies, credentials, cookies, query strings, and identifying subpaths for request, calendar, approval, and administration endpoints. Detailed absence access remains in the application audit log rather than infrastructure logs.
 
-Run migrations before starting a new image:
+The Compose migration service runs `prisma migrate deploy` and must complete successfully before the portal starts:
 
 ```bash
-docker compose run --rm portal pnpm --filter @ferie/server db:deploy
-docker compose up -d
+docker compose up -d --build
 ```
 
 Employee Directory must implement [the minimal OpenAPI projection](docs/employee-directory-openapi.yaml) and [the Auth0 role synchronization design](docs/ed-role-sync.md). Ferie synchronizes the projection every 15 minutes and authorizes every object operation against the current local mirror.
@@ -61,3 +62,5 @@ pnpm build
 ```
 
 Key behavior is covered by unit tests for Italian/Easter holiday rules, working-day and hourly calculations, allocation validation, and the approval state machine. Server tests cover health and baseline security headers. Live smoke testing should use a disposable PostgreSQL database because request and import workflows intentionally create audit records.
+
+GitHub Actions runs migrations, typecheck, the complete test suite, and the production build for every pull request and every push to `main`.

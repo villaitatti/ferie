@@ -19,16 +19,31 @@ ENV VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}
 ENV VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
 RUN pnpm db:generate && pnpm build
 
+FROM build AS production-dependencies
+RUN pnpm --filter @ferie/server deploy --prod --legacy /prod/server
+RUN source_client="$(find /app/node_modules -path '*/node_modules/.prisma/client/index.js' -print -quit)" \
+    && target_client="$(readlink -f /prod/server/node_modules/@prisma/client)" \
+    && target_modules="$(dirname "$(dirname "$target_client")")" \
+    && test -n "$source_client" \
+    && test -n "$target_client" \
+    && cp -R "$(dirname "$(dirname "$source_client")")" "$target_modules/.prisma" \
+    && find /prod/server/node_modules -type l \( -name prisma -o -name typescript \) -delete \
+    && find /prod/server/node_modules -path '*/node_modules/.bin/prisma' -delete \
+    && find /prod/server/node_modules -path '*/node_modules/.bin/tsc' -delete \
+    && find /prod/server/node_modules -path '*/node_modules/.bin/tsserver' -delete \
+    && find /prod/server/node_modules/.pnpm -maxdepth 1 -type d \( -name 'prisma@*' -o -name 'typescript@*' \) -exec rm -rf {} +
+
+FROM build AS migration
+ENV NODE_ENV=production
+CMD ["pnpm", "--filter", "@ferie/server", "db:deploy"]
+
 FROM node:22-bookworm-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends curl openssl && rm -rf /var/lib/apt/lists/* && corepack enable && corepack prepare pnpm@10.32.1 --activate
+RUN apt-get update && apt-get install -y --no-install-recommends curl openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=production-dependencies /prod/server/node_modules ./node_modules
 COPY --from=build /app/packages/server/package.json ./packages/server/package.json
-COPY --from=build /app/packages/server/node_modules ./packages/server/node_modules
 COPY --from=build /app/packages/server/dist ./packages/server/dist
-COPY --from=build /app/packages/server/prisma ./packages/server/prisma
 COPY --from=build /app/packages/web/dist ./packages/web/dist
 EXPOSE 3000
 CMD ["node", "packages/server/dist/index.js"]

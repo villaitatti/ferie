@@ -9,6 +9,7 @@ describe("runtime authentication configuration", () => {
 
   it("requires an Auth0 domain and audience in JWT mode", () => {
     expect(() => parseConfig({ NODE_ENV: "test", AUTH_DISABLED: "false" })).toThrow("AUTH0_CONFIGURATION_REQUIRED");
+    expect(() => parseConfig({ NODE_ENV: "production", AUTH_DISABLED: "false", AUTH0_DOMAIN: "  ", AUTH0_AUDIENCE: "" })).toThrow("AUTH0_CONFIGURATION_REQUIRED");
     expect(parseConfig({ NODE_ENV: "production", AUTH_DISABLED: "false", AUTH0_DOMAIN: "tenant.example", AUTH0_AUDIENCE: "ferie-api" }).AUTH_DISABLED).toBe(false);
   });
 });

@@ -14,13 +14,15 @@ services:
         VITE_AUTH0_DOMAIN: ${AUTH0_DOMAIN}
         VITE_AUTH0_CLIENT_ID: ${VITE_AUTH0_CLIENT_ID}
         VITE_AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
-    env_file: .env
+    env_file: ${ENV_FILE:-.env}
     environment:
       DATABASE_URL: postgresql://ferie:${DB_PASSWORD}@db:5432/ferie
       NODE_ENV: production
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks:
       - internal
       - itatti-tunnel
@@ -30,6 +32,22 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+    logging: *default-logging
+
+  migrate:
+    build:
+      context: .
+      target: migration
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: postgresql://ferie:${DB_PASSWORD}@db:5432/ferie
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
     logging: *default-logging
 
   db:

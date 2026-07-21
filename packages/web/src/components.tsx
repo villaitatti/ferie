@@ -46,7 +46,7 @@ export function BalanceTile({ balance }: { balance: BalanceSummary }) {
       <Group justify="space-between" align="flex-start" wrap="nowrap">
         <div>
           <Text size="sm" c="dimmed" fw={600}>{i18n.language === "en" ? balance.labelEn : balance.labelIt}</Text>
-          <Text className="balance-value" component="div"><Quantity amount={balance.projected ?? 0} unit={balance.unit} /></Text>
+          <Text className="balance-value" component="div">{balance.projected === null ? "—" : <Quantity amount={balance.projected} unit={balance.unit} />}</Text>
         </div>
         <ThemeIcon variant="light" color={balance.stale ? "orange" : "forest"} size="lg"><CalendarDays size={19} /></ThemeIcon>
       </Group>
@@ -56,7 +56,7 @@ export function BalanceTile({ balance }: { balance: BalanceSummary }) {
           <Text size="xs" c="dimmed">{t("pending")}: <strong><Quantity amount={balance.pending} unit={balance.unit} /></strong></Text>
         </Group>
       )}
-      <Text size="xs" c={balance.stale ? "orange" : "dimmed"} mt={6}>{balance.asOf ? `${t("asOf")} ${formatPortalDate(balance.asOf, i18n.language)}` : t("stale")}</Text>
+      {balance.projected !== null && <Text size="xs" c={balance.stale ? "orange" : "dimmed"} mt={6}>{balance.asOf ? `${t("asOf")} ${formatPortalDate(balance.asOf, i18n.language)}` : t("stale")}</Text>}
     </Paper>
   );
 }
