@@ -1,0 +1,62 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "7"
+
+services:
+  portal:
+    build:
+      context: .
+      args:
+        VITE_API_URL: /api
+        VITE_AUTH_DISABLED: "false"
+        VITE_AUTH0_DOMAIN: ${AUTH0_DOMAIN}
+        VITE_AUTH0_CLIENT_ID: ${VITE_AUTH0_CLIENT_ID}
+        VITE_AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://ferie:${DB_PASSWORD}@db:5432/ferie
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+      - itatti-tunnel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ferie
+      POSTGRES_USER: ferie
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferie"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
+networks:
+  internal:
+    driver: bridge
+  itatti-tunnel:
+    external: true
+
+volumes:
+  pgdata:

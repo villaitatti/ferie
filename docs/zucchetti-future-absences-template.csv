@@ -1,0 +1,3 @@
+externalReference,employeeNumber,absenceTypeCode,startDate,endDate,startTime,endTime,accountCode,amount
+ZUCC-2026-1001-01,1001,FERIE,2026-08-03,2026-08-07,,,FERIE,4
+ZUCC-2026-1001-01,1001,FERIE,2026-08-03,2026-08-07,,,EX_FESTIVITA,1

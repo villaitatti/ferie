@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+coverage/
+*.log
+*.tsbuildinfo
+.DS_Store
+.context/
+packages/server/prisma/dev.db*
+packages/server/src/generated/
