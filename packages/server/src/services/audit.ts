@@ -9,16 +9,22 @@ export async function audit(
   entityId: string,
   metadata: Record<string, unknown> = {},
 ) {
+  const directoryActor = await prisma.employeeMirror.findUnique({
+    where: { auth0Subject: request.actor.subject },
+    select: { roles: true },
+  });
+  const actorRoles = directoryActor?.roles ?? [];
+
   await prisma.auditEvent.create({
     data: {
       actorSubject: request.actor.subject,
-      actorRole: request.actor.roles[0],
+      actorRole: actorRoles[0] ?? null,
       action,
       entityType,
       entityId,
       requestId: entityType === "AbsenceRequest" ? entityId : undefined,
       ipAddress: request.ip,
-      metadata: metadata as Prisma.InputJsonValue,
+      metadata: { ...metadata, actorRoles } as Prisma.InputJsonValue,
     },
   });
 }
