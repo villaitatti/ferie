@@ -21,6 +21,7 @@ import {
   type RequestCalendarDay,
   type RequestCalendarHoliday,
   type RequestPreviewInput,
+  type SensitiveAbsenceInput,
   type WorkInterval,
 } from "@ferie/shared";
 import { prisma } from "../lib/prisma.js";
@@ -246,7 +247,7 @@ async function lockEmployeeRequests(tx: Prisma.TransactionClient, employeeId: st
   await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${employeeId}, 0))`);
 }
 
-async function checkOverlap(db: PortalDb, employeeId: string, input: RequestPreviewInput, excludeRequestId?: string) {
+async function checkOverlap(db: PortalDb, employeeId: string, input: RequestPreviewInput | SensitiveAbsenceInput, excludeRequestId?: string) {
   const candidates = await db.absenceRequest.findMany({
     where: {
       employeeId,
@@ -587,28 +588,40 @@ export async function createSensitiveAbsence(request: Request, raw: unknown) {
   const input = sensitiveAbsenceSchema.parse(raw);
   const actor = await actorEmployee(request);
   if (!actor.roles.includes("FERIE_PORTAL_ADMIN")) throw new HttpError(403, "ADMIN_REQUIRED");
-  const target = await findEmployeeForInput(request, input.employeeId);
-  const absenceType = await prisma.absenceType.findUnique({ where: { code: input.absenceTypeCode } });
-  if (!absenceType || absenceType.entryMode !== "ADMIN_ONLY") throw new HttpError(400, "ADMIN_ABSENCE_TYPE_REQUIRED");
-  const holidays = await effectiveHolidayDates(input.startDate, input.endDate);
-  const calculation = calculateVacationDays(input.startDate, input.endDate, target.schedule as unknown as WorkInterval[], holidays);
-  const created = await prisma.absenceRequest.create({
-    data: {
-      employeeId: target.id,
-      absenceTypeId: absenceType.id,
-      startDate: dbDate(input.startDate),
-      endDate: dbDate(input.endDate),
-      quantity: calculation.quantityDays,
-      unit: "DAYS",
-      status: "APPROVED",
-      provenance: "ADMIN_MANUAL",
-      submittedAt: new Date(),
-      resolvedAt: new Date(),
-      employeeSnapshot: { employeeNumber: target.employeeNumber, displayName: target.displayName, departmentId: target.departmentId, fte: number(target.fte), schedule: target.schedule },
-      calculationSnapshot: { segments: calculation.deductibleDates },
-      segments: { create: calculation.deductibleDates.map((date) => ({ date: dbDate(date), quantity: 1, unit: "DAYS" })) },
-      decisions: { create: { actorSubject: actor.auth0Subject, actorName: actor.displayName, action: "APPROVE", toStatus: "APPROVED" } },
-    },
+  const authorizedTarget = await findEmployeeForInput(request, input.employeeId);
+  const created = await prisma.$transaction(async (tx) => {
+    await lockEmployeeRequests(tx, authorizedTarget.id);
+    const target = await tx.employeeMirror.findUnique({ where: { id: authorizedTarget.id } });
+    if (!target) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
+    const absenceType = await tx.absenceType.findUnique({ where: { code: input.absenceTypeCode } });
+    if (!absenceType || absenceType.entryMode !== "ADMIN_ONLY") throw new HttpError(400, "ADMIN_ABSENCE_TYPE_REQUIRED");
+    await checkOverlap(tx, target.id, input);
+    const holidays = await effectiveHolidayDates(input.startDate, input.endDate, tx);
+    let calculation;
+    try {
+      calculation = calculateVacationDays(input.startDate, input.endDate, target.schedule as unknown as WorkInterval[], holidays);
+    } catch (error) {
+      throw new HttpError(400, error instanceof Error ? error.message : "INVALID_DATE_RANGE");
+    }
+    if (calculation.quantityDays === 0) throw new HttpError(400, "NO_WORKING_DAYS");
+    return tx.absenceRequest.create({
+      data: {
+        employeeId: target.id,
+        absenceTypeId: absenceType.id,
+        startDate: dbDate(input.startDate),
+        endDate: dbDate(input.endDate),
+        quantity: calculation.quantityDays,
+        unit: "DAYS",
+        status: "APPROVED",
+        provenance: "ADMIN_MANUAL",
+        submittedAt: new Date(),
+        resolvedAt: new Date(),
+        employeeSnapshot: { employeeNumber: target.employeeNumber, displayName: target.displayName, departmentId: target.departmentId, fte: number(target.fte), schedule: target.schedule },
+        calculationSnapshot: { segments: calculation.deductibleDates },
+        segments: { create: calculation.deductibleDates.map((date) => ({ date: dbDate(date), quantity: 1, unit: "DAYS" })) },
+        decisions: { create: { actorSubject: actor.auth0Subject, actorName: actor.displayName, action: "APPROVE", toStatus: "APPROVED" } },
+      },
+    });
   });
   await audit(request, "SENSITIVE_ABSENCE_CREATED", "AbsenceRequest", created.id, { absenceTypeCode: input.absenceTypeCode });
   return serializeRequest(await getRequest(created.id));
