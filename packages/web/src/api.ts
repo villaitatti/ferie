@@ -8,7 +8,7 @@ export function setTokenProvider(provider: (() => Promise<string>) | null) {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message); }
+  constructor(public status: number, public code: string, message: string, public details?: unknown) { super(message); }
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -19,8 +19,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (import.meta.env.VITE_AUTH_DISABLED !== "false") headers.set("x-demo-subject", localStorage.getItem("ferie-demo-subject") ?? "auth0|demo-employee");
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ code: "REQUEST_FAILED" })) as { code?: string; message?: string };
-    throw new ApiError(response.status, payload.code ?? "REQUEST_FAILED", payload.message ?? payload.code ?? "Request failed");
+    const payload = await response.json().catch(() => ({ code: "REQUEST_FAILED" })) as { code?: string; message?: string; details?: unknown };
+    throw new ApiError(response.status, payload.code ?? "REQUEST_FAILED", payload.message ?? payload.code ?? "Request failed", payload.details);
   }
   return response.json() as Promise<T>;
 }

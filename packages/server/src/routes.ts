@@ -9,6 +9,7 @@ import {
   createSensitiveAbsence,
   decideRequest,
   getMe,
+  getRequestDetail,
   importFutureAbsences,
   listAdminData,
   listApprovals,
@@ -42,6 +43,7 @@ async function tabularRows(file: Express.Multer.File): Promise<Array<Record<stri
 api.get("/health", (_request, response) => response.json({ status: "ok", service: "ferie-portal" }));
 api.get("/me", asyncHandler(async (request, response) => response.json(await getMe(request))));
 api.get("/requests", asyncHandler(async (request, response) => response.json(await listMyRequests(request))));
+api.get("/requests/:id", asyncHandler(async (request, response) => response.json(await getRequestDetail(request, String(request.params.id)))));
 api.get("/request-calendar", asyncHandler(async (request, response) => response.json(await listRequestCalendar(request, request.query))));
 api.post("/requests/preview", asyncHandler(async (request, response) => response.json(await previewRequest(request, request.body))));
 api.post("/requests", asyncHandler(async (request, response) => response.status(201).json(await submitRequest(request, request.body))));

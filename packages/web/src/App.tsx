@@ -6,12 +6,14 @@ import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { api, type MeResponse } from "./api";
+import { usePortalSession } from "./auth";
 import { PageLoader } from "./components";
 import { splitMobileNavigation } from "./mobile-navigation";
 
 const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
 const NewRequest = lazy(() => import("./pages/NewRequest").then((module) => ({ default: module.NewRequest })));
 const Requests = lazy(() => import("./pages/Requests").then((module) => ({ default: module.Requests })));
+const RequestDetail = lazy(() => import("./pages/RequestDetail").then((module) => ({ default: module.RequestDetail })));
 const Approvals = lazy(() => import("./pages/Approvals").then((module) => ({ default: module.Approvals })));
 const CalendarPage = lazy(() => import("./pages/CalendarPage").then((module) => ({ default: module.CalendarPage })));
 const Admin = lazy(() => import("./pages/Admin").then((module) => ({ default: module.Admin })));
@@ -31,6 +33,7 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { signOut } = usePortalSession();
   const me = useQuery({ queryKey: ["me"], queryFn: () => api<MeResponse>("/me") });
   if (me.isLoading) return <main className="boot-loader"><PageLoader /></main>;
   if (me.isError || !me.data) return <main className="boot-error"><Text fw={700}>{i18n.language === "en" ? "Access unavailable" : "Accesso non disponibile"}</Text><Text c="dimmed">{me.error instanceof Error ? me.error.message : i18n.language === "en" ? "Your Employee Directory identity could not be loaded." : "Impossibile caricare l'identità da Employee Directory."}</Text></main>;
@@ -53,8 +56,9 @@ export function App() {
     navigate("/");
   };
 
+  const pathIsActive = (path: string) => location.pathname === path || (path === "/requests" && location.pathname.startsWith("/requests/"));
   const nav = navigation.map(({ path, label, icon: Icon, badge }) => (
-    <NavLink key={path} label={label} leftSection={<Icon size={19} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} active={location.pathname === path} onClick={() => { navigate(path); close(); }} />
+    <NavLink key={path} label={label} leftSection={<Icon size={19} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} active={pathIsActive(path)} onClick={() => { navigate(path); close(); }} />
   ));
   const mobileNavigation = splitMobileNavigation(navigation);
   const mobileOverflowActive = mobileNavigation.overflow.some((entry) => entry.path === location.pathname);
@@ -73,7 +77,7 @@ export function App() {
                 <Menu.Label>{me.data.employee.email}</Menu.Label>
                 {import.meta.env.VITE_AUTH_DISABLED !== "false" && <Menu.Item closeMenuOnClick={false}><Select label={t("rolePreview")} data={demoUsers} value={localStorage.getItem("ferie-demo-subject") ?? "auth0|demo-employee"} onChange={changeDemo} size="xs" /></Menu.Item>}
                 <Menu.Divider />
-                <Menu.Item leftSection={<LogOut size={16} />} disabled>{t("signOut")}</Menu.Item>
+                <Menu.Item leftSection={<LogOut size={16} />} onClick={signOut}>{t("signOut")}</Menu.Item>
               </Menu.Dropdown>
             </Menu>
           </Group>
@@ -90,7 +94,7 @@ export function App() {
         <Route path="/" element={<Dashboard me={me.data} />} />
         <Route path="/new" element={<NewRequest me={me.data} />} />
         <Route path="/requests" element={<Requests />} />
-        <Route path="/requests/:id" element={<Requests />} />
+        <Route path="/requests/:id" element={<RequestDetail />} />
         <Route path="/approvals" element={<Approvals />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/admin" element={me.data.capabilities.canAdminister ? <Admin /> : <Navigate to="/" />} />
@@ -98,11 +102,11 @@ export function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes></Suspense></main></AppShell.Main>
       <nav className="mobile-nav" aria-label={i18n.language === "en" ? "Primary navigation" : "Navigazione principale"}>
-        {mobileNavigation.primary.map(({ path, label, icon: Icon, badge }) => <button key={path} className={location.pathname === path ? "active" : ""} onClick={() => navigate(path)}><span><Icon size={20} />{badge ? <i>{badge}</i> : null}</span><small>{label}</small></button>)}
+        {mobileNavigation.primary.map(({ path, label, icon: Icon, badge }) => <button key={path} className={pathIsActive(path) ? "active" : ""} onClick={() => navigate(path)}><span><Icon size={20} />{badge ? <i>{badge}</i> : null}</span><small>{label}</small></button>)}
         {mobileNavigation.overflow.length > 0 && <Menu position="top-end" width={230} withinPortal>
           <Menu.Target><button className={mobileOverflowActive ? "active" : ""} aria-label={t("more")}><span><Ellipsis size={22} />{mobileOverflowBadge ? <i>{mobileOverflowBadge}</i> : null}</span><small>{t("more")}</small></button></Menu.Target>
           <Menu.Dropdown>
-            {mobileNavigation.overflow.map(({ path, label, icon: Icon, badge }) => <Menu.Item key={path} leftSection={<Icon size={18} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} color={location.pathname === path ? "forest" : undefined} onClick={() => navigate(path)}>{label}</Menu.Item>)}
+            {mobileNavigation.overflow.map(({ path, label, icon: Icon, badge }) => <Menu.Item key={path} leftSection={<Icon size={18} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} color={pathIsActive(path) ? "forest" : undefined} onClick={() => navigate(path)}>{label}</Menu.Item>)}
           </Menu.Dropdown>
         </Menu>}
       </nav>

@@ -31,7 +31,7 @@ Normal approval is a single peer decision, not a pre-approver-to-responsabile ch
 
 ## Production configuration
 
-Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. The server refuses to start in production with demo authentication or incomplete Auth0 JWT configuration. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
+Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. Register that application origin in Auth0 as an allowed callback URL, logout URL, and web origin. The server refuses to start in production with demo authentication or incomplete Auth0 JWT configuration. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
 
 Production PostgreSQL is reachable only from the Compose `internal` network. Port `5433` is published by `docker-compose.dev.yml` for local development only.
 
@@ -50,7 +50,7 @@ Employee Directory must implement [the minimal OpenAPI projection](docs/employee
 
 Balance imports accept CSV/XLSX columns `employeeNumber`, `accountCode`, `amount`, and `asOf`; the commit also requires an explicit cutoff date. Use [the balance template](docs/zucchetti-import-template.csv).
 
-Opening future absences accept CSV/XLSX rows grouped by `externalReference`, permitting ferie/ex-festività splits across multiple rows. Use [the future-absence template](docs/zucchetti-future-absences-template.csv). Both flows match employees only by ED employee number.
+Opening future absences accept CSV/XLSX rows grouped by `externalReference`, permitting ferie/ex-festività splits across multiple rows. The entire file is validated and committed in one transaction; if any row fails, no absences are imported and the UI reports the row errors. Use [the future-absence template](docs/zucchetti-future-absences-template.csv). Both flows match employees only by ED employee number.
 
 ## Verification
 

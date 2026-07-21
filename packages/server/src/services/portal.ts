@@ -18,6 +18,8 @@ import {
   submitRequestSchema,
   validatePermissionInterval,
   type BalanceSummary,
+  type FutureAbsenceImportInput,
+  type RequestDetail,
   type RequestListItem,
   type RequestCalendarDay,
   type RequestCalendarHoliday,
@@ -448,8 +450,44 @@ function serializeRequest(entry: Awaited<ReturnType<typeof getRequest>>): Reques
     overBalance: entry.overBalance,
     submittedAt: entry.submittedAt?.toISOString() ?? null,
     allocations: entry.allocations.map((allocation) => ({ accountCode: allocation.account.code, amount: number(allocation.amount) })),
-    decisions: entry.decisions,
+    decisions: entry.decisions.map((decision) => ({
+      id: decision.id,
+      actorName: decision.actorName,
+      action: decision.action,
+      fromStatus: decision.fromStatus,
+      toStatus: decision.toStatus,
+      comment: decision.comment,
+      createdAt: decision.createdAt.toISOString(),
+    })),
   };
+}
+
+export async function getRequestDetail(request: Request, id: string): Promise<RequestDetail> {
+  const actor = await actorEmployee(request);
+  const entry = await getRequest(id);
+  const assigned = await prisma.approverAssignment.count({ where: { employeeId: entry.employeeId, approverId: actor.id } }) > 0;
+  const finalStageReached = entry.status === "PENDING_FINAL_APPROVAL" || entry.decisions.some((decision) =>
+    decision.fromStatus === "PENDING_FINAL_APPROVAL" || decision.toStatus === "PENDING_FINAL_APPROVAL"
+  );
+  const finalRelated = actor.roles.includes("FERIE_FINAL_APPROVER") && finalStageReached;
+  const isOwner = entry.employeeId === actor.id;
+  const isAdmin = actor.roles.includes("FERIE_PORTAL_ADMIN");
+  const assignedSelfService = assigned && entry.provenance === "SELF_SERVICE";
+  if (!isOwner && !isAdmin && !assignedSelfService && !finalRelated) throw new HttpError(403, "REQUEST_ACCESS_DENIED");
+
+  const canDecide = entry.status === "PENDING_FINAL_APPROVAL"
+    ? actor.roles.includes("FERIE_FINAL_APPROVER")
+    : (entry.status === "PENDING_APPROVAL" || entry.status === "CANCELLATION_REQUESTED") && assigned;
+  return {
+    ...serializeRequest(entry),
+    permissions: {
+      canDecide,
+      canModify: isOwner && entry.status === "APPROVED",
+      canWithdraw: isOwner && (entry.status === "PENDING_APPROVAL" || entry.status === "PENDING_FINAL_APPROVAL"),
+      canRequestCancellation: isOwner && entry.status === "APPROVED",
+      approvalContext: assignedSelfService || finalRelated,
+    },
+  } as RequestDetail;
 }
 
 export async function listMyRequests(request: Request) {
@@ -691,42 +729,96 @@ export async function resolveReconciliation(request: Request, id: string, raw: u
   return result;
 }
 
+type FutureImportRow = FutureAbsenceImportInput["rows"][number];
+type FutureImportError = { rowNumber: number; code: string; conflictingRowNumber?: number };
+
+export function futureImportRowsOverlap(left: FutureImportRow, right: FutureImportRow): boolean {
+  if (left.endDate < right.startDate || right.endDate < left.startDate) return false;
+  if (left.absenceTypeCode !== "PERMESSO" || right.absenceTypeCode !== "PERMESSO") return true;
+  if (left.startDate !== right.startDate) return false;
+  return left.startTime! < right.endTime! && left.endTime! > right.startTime!;
+}
+
 export async function importFutureAbsences(request: Request, raw: unknown) {
   await assertCurrentRole(request, ["FERIE_PORTAL_ADMIN"]);
   const input = futureAbsenceImportSchema.parse(raw);
-  const createdIds: string[] = [];
-  const errors: Array<{ rowNumber: number; code: string }> = [];
-  for (const [index, row] of input.rows.entries()) {
-    try {
+  const checksum = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended('future-absence-import', 0))`);
+    const [employees, types, existingReferences] = await Promise.all([
+      tx.employeeMirror.findMany({ where: { employeeNumber: { in: [...new Set(input.rows.map((row) => row.employeeNumber))] } }, include: { department: true } }),
+      tx.absenceType.findMany({ where: { code: { in: [...new Set(input.rows.map((row) => row.absenceTypeCode))] } } }),
+      tx.reconciliationCase.findMany({
+        where: { externalReference: { in: [...new Set(input.rows.map((row) => row.externalReference).filter((value): value is string => Boolean(value)))] } },
+        select: { externalReference: true },
+      }),
+    ]);
+    const employeeByNumber = new Map(employees.map((employee) => [employee.employeeNumber, employee]));
+    const typeByCode = new Map(types.map((type) => [type.code, type]));
+    const unavailableReferences = new Set(existingReferences.map((entry) => entry.externalReference).filter((value): value is string => Boolean(value)));
+    const seenReferences = new Map<string, number>();
+    const errors: FutureImportError[] = [];
+    const prepared: Array<{
+      rowNumber: number;
+      row: FutureImportRow;
+      employee: (typeof employees)[number];
+      absenceTypeId: string;
+      preview: Awaited<ReturnType<typeof calculateRequestPreview>>;
+      allocations: Array<{ accountCode: string; amount: number }>;
+    }> = [];
+
+    for (const employeeId of [...new Set(employees.map((employee) => employee.id))].sort()) await lockEmployeeRequests(tx, employeeId);
+
+    for (const [index, row] of input.rows.entries()) {
+      const rowNumber = index + 1;
+      const employee = employeeByNumber.get(row.employeeNumber);
+      const type = typeByCode.get(row.absenceTypeCode);
       if (row.externalReference) {
-        const duplicate = await prisma.reconciliationCase.findFirst({ where: { externalReference: row.externalReference } });
-        if (duplicate) throw new HttpError(409, "DUPLICATE_EXTERNAL_REFERENCE");
-      }
-      const employee = await prisma.employeeMirror.findUnique({ where: { employeeNumber: row.employeeNumber }, include: { department: true } });
-      if (!employee) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
-      const rawPreview = row.absenceTypeCode === "PERMESSO"
-        ? { ...row, employeeId: employee.id, endDate: row.startDate, startTime: row.startTime, endTime: row.endTime }
-        : { ...row, employeeId: employee.id, allocations: row.allocations };
-      const preview = await previewRequest(request, rawPreview);
-      const allocations = row.absenceTypeCode === "FERIE" && preview.allocations.length === 0 ? [{ accountCode: "FERIE", amount: preview.quantity }] : preview.allocations;
-      if (row.absenceTypeCode === "FERIE" && !allocationsEqualDays(allocations, preview.quantity)) throw new HttpError(400, "ALLOCATIONS_MUST_EQUAL_DEDUCTIBLE_DAYS");
-      const type = await prisma.absenceType.findUniqueOrThrow({ where: { code: row.absenceTypeCode } });
-      const result = await prisma.$transaction(async (tx) => {
-        const entry = await tx.absenceRequest.create({ data: { employeeId: employee.id, absenceTypeId: type.id, startDate: dbDate(row.startDate), endDate: dbDate(row.endDate), startTime: row.startTime, endTime: row.endTime, quantity: preview.quantity, unit: preview.unit, status: "APPROVED", provenance: "EXTERNAL_IMPORT", reconciliationStatus: row.externalReference ? "MATCHED" : "UNRECONCILED", employeeSnapshot: { employeeNumber: employee.employeeNumber, displayName: employee.displayName, departmentId: employee.departmentId, departmentName: employee.department.name, fte: number(employee.fte), schedule: employee.schedule }, calculationSnapshot: { sourceName: input.sourceName, segments: preview.segments.map((segment) => ({ date: segment.date, quantity: segment.quantity, exclusionReason: segment.exclusionReason })), allocations }, submittedAt: new Date(), resolvedAt: new Date(), segments: { create: preview.segments.map((segment) => ({ date: dbDate(segment.date), quantity: segment.quantity, unit: preview.unit, exclusionReason: segment.exclusionReason })) } } });
-        for (const allocation of allocations) {
-          const account = await tx.balanceAccount.findUniqueOrThrow({ where: { code: allocation.accountCode } });
-          await tx.requestBalanceAllocation.create({ data: { requestId: entry.id, accountId: account.id, amount: allocation.amount } });
+        const conflictingRowNumber = seenReferences.get(row.externalReference);
+        if (unavailableReferences.has(row.externalReference) || conflictingRowNumber) {
+          errors.push({ rowNumber, code: "DUPLICATE_EXTERNAL_REFERENCE", ...(conflictingRowNumber ? { conflictingRowNumber } : {}) });
+          continue;
         }
-        await tx.reconciliationCase.create({ data: { requestId: entry.id, status: row.externalReference ? "MATCHED" : "UNRECONCILED", externalReference: row.externalReference, expectedAmount: preview.quantity, actualAmount: preview.quantity } });
-        return entry;
-      });
-      createdIds.push(result.id);
-    } catch (error) {
-      errors.push({ rowNumber: index + 1, code: error instanceof HttpError ? error.code : "IMPORT_ROW_FAILED" });
+        seenReferences.set(row.externalReference, rowNumber);
+      }
+      if (!employee) { errors.push({ rowNumber, code: "EMPLOYEE_NOT_FOUND" }); continue; }
+      if (!type?.active) { errors.push({ rowNumber, code: "ABSENCE_TYPE_DISABLED" }); continue; }
+
+      try {
+        const previewInput = row.absenceTypeCode === "PERMESSO"
+          ? { ...row, employeeId: employee.id, endDate: row.startDate, startTime: row.startTime!, endTime: row.endTime! }
+          : { ...row, employeeId: employee.id, allocations: row.allocations };
+        const parsedPreview = requestPreviewSchema.safeParse(previewInput);
+        if (!parsedPreview.success) throw new HttpError(400, "INVALID_REQUEST_ROW");
+        const preview = await calculateRequestPreview(employee, parsedPreview.data, undefined, tx);
+        const allocations = row.absenceTypeCode === "FERIE" && preview.allocations.length === 0 ? [{ accountCode: "FERIE", amount: preview.quantity }] : preview.allocations;
+        if (row.absenceTypeCode === "FERIE" && !allocationsEqualDays(allocations, preview.quantity)) throw new HttpError(400, "ALLOCATIONS_MUST_EQUAL_DEDUCTIBLE_DAYS");
+        const conflict = prepared.find((entry) => entry.employee.id === employee.id && futureImportRowsOverlap(entry.row, row));
+        if (conflict) { errors.push({ rowNumber, code: "OVERLAPPING_IMPORT_ROWS", conflictingRowNumber: conflict.rowNumber }); continue; }
+        prepared.push({ rowNumber, row, employee, absenceTypeId: type.id, preview, allocations });
+      } catch (error) {
+        if (!(error instanceof HttpError)) throw error;
+        errors.push({ rowNumber, code: error.code });
+      }
     }
-  }
-  await audit(request, "FUTURE_ABSENCES_IMPORTED", "AbsenceImport", createHash("sha256").update(JSON.stringify(input)).digest("hex"), { sourceName: input.sourceName, created: createdIds.length, errors });
-  return { createdIds, errors };
+
+    if (errors.length > 0) return { createdIds: [] as string[], errors };
+
+    const createdIds: string[] = [];
+    for (const { row, employee, absenceTypeId, preview, allocations } of prepared) {
+      const entry = await tx.absenceRequest.create({ data: { employeeId: employee.id, absenceTypeId, startDate: dbDate(row.startDate), endDate: dbDate(row.endDate), startTime: row.startTime, endTime: row.endTime, quantity: preview.quantity, unit: preview.unit, status: "APPROVED", provenance: "EXTERNAL_IMPORT", reconciliationStatus: row.externalReference ? "MATCHED" : "UNRECONCILED", employeeSnapshot: { employeeNumber: employee.employeeNumber, displayName: employee.displayName, departmentId: employee.departmentId, departmentName: employee.department.name, fte: number(employee.fte), schedule: employee.schedule }, calculationSnapshot: { sourceName: input.sourceName, segments: preview.segments.map((segment) => ({ date: segment.date, quantity: segment.quantity, exclusionReason: segment.exclusionReason })), allocations }, submittedAt: new Date(), resolvedAt: new Date(), segments: { create: preview.segments.map((segment) => ({ date: dbDate(segment.date), quantity: segment.quantity, unit: preview.unit, exclusionReason: segment.exclusionReason })) } } });
+      for (const allocation of allocations) {
+        const account = await tx.balanceAccount.findUniqueOrThrow({ where: { code: allocation.accountCode } });
+        await tx.requestBalanceAllocation.create({ data: { requestId: entry.id, accountId: account.id, amount: allocation.amount } });
+      }
+      await tx.reconciliationCase.create({ data: { requestId: entry.id, status: row.externalReference ? "MATCHED" : "UNRECONCILED", externalReference: row.externalReference, expectedAmount: preview.quantity, actualAmount: preview.quantity } });
+      createdIds.push(entry.id);
+    }
+    return { createdIds, errors };
+  }, { maxWait: 10_000, timeout: 120_000 });
+  await audit(request, "FUTURE_ABSENCES_IMPORTED", "AbsenceImport", checksum, { sourceName: input.sourceName, checksum, created: result.createdIds.length, errors: result.errors });
+  if (result.errors.length > 0) throw new HttpError(400, "IMPORT_HAS_ERRORS", "IMPORT_HAS_ERRORS", { errors: result.errors });
+  return result;
 }
 
 export async function listAdminData(request: Request) {

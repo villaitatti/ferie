@@ -6,7 +6,7 @@ import { CalendarPlus, FileSpreadsheet, History, LockKeyhole, RefreshCw, Upload 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { formatPortalDateTime, toDateOnlyString } from "../request-calendar";
 
 interface AdminData {
@@ -18,6 +18,7 @@ interface AdminData {
 }
 interface Holiday { id: string; code: string; labelIt: string; labelEn: string; kind: string; recurrence: string; active: boolean }
 interface ImportPreview { input: unknown; checksum: string; duplicateBatchId: string | null; validCount: number; errorCount: number; rows: Array<{ rowNumber: number; employeeNumber: string; accountCode: string; amount: number; errors: string[] }> }
+interface FutureImportError { rowNumber: number; code: string; conflictingRowNumber?: number }
 
 export function Admin() {
   const { t, i18n } = useTranslation();
@@ -31,6 +32,7 @@ export function Admin() {
   const [endDate, setEndDate] = useState(today);
   const [file, setFile] = useState<File | null>(null);
   const [futureFile, setFutureFile] = useState<File | null>(null);
+  const [futureErrors, setFutureErrors] = useState<FutureImportError[]>([]);
   const [cutoff, setCutoff] = useState(today);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [holiday, setHoliday] = useState({ code: "", labelIt: "", labelEn: "", oneOffDate: today });
@@ -53,8 +55,13 @@ export function Admin() {
   });
   const importFuture = useMutation({
     mutationFn: async () => { const form = new FormData(); if (futureFile) form.append("file", futureFile); return api<{ createdIds: string[]; errors: unknown[] }>("/admin/future-absence-imports/file", { method: "POST", body: form }); },
-    onSuccess: async (result) => { toast.success(i18n.language === "en" ? `${result.createdIds.length} records imported` : `${result.createdIds.length} assenze importate`); setFutureFile(null); await queryClient.invalidateQueries(); },
-    onError: (error: Error) => toast.error(error.message),
+    onMutate: () => setFutureErrors([]),
+    onSuccess: async (result) => { toast.success(i18n.language === "en" ? `${result.createdIds.length} records imported` : `${result.createdIds.length} assenze importate`); setFutureErrors([]); setFutureFile(null); await queryClient.invalidateQueries(); },
+    onError: (error: Error) => {
+      const details = error instanceof ApiError && typeof error.details === "object" && error.details !== null ? error.details as { errors?: FutureImportError[] } : undefined;
+      setFutureErrors(details?.errors ?? []);
+      toast.error(i18n.language === "en" ? "The file contains errors. Nothing was imported." : "Il file contiene errori. Nessuna assenza è stata importata.");
+    },
   });
   const adjust = useMutation({
     mutationFn: () => api("/admin/balance-adjustments", { method: "POST", body: JSON.stringify({ ...adjustment, amount: Number(adjustment.amount) }) }),
@@ -86,7 +93,7 @@ export function Admin() {
         <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Monthly balance file" : "File saldi mensile"}</Title><SimpleGrid cols={{ base: 1, sm: 2 }} mt="md"><FileInput label={t("chooseFile")} accept=".csv,.xlsx,.xls" value={file} onChange={setFile} leftSection={<Upload size={16} />} /><DateInput {...dateInputProps} label={t("cutoff")} value={cutoff} onChange={(value) => setCutoff(toDateOnlyString(value) ?? "")} /></SimpleGrid><Group justify="flex-end" mt="md"><Button variant="light" disabled={!file} loading={previewFile.isPending} onClick={() => previewFile.mutate()}>{t("importPreview")}</Button></Group></Paper>
         {preview && <Paper withBorder p="md"><Group justify="space-between"><Group><Badge color="green">{preview.validCount} {i18n.language === "en" ? "valid" : "valide"}</Badge><Badge color={preview.errorCount ? "red" : "gray"}>{preview.errorCount} {i18n.language === "en" ? "errors" : "errori"}</Badge>{preview.duplicateBatchId && <Badge color="orange">{i18n.language === "en" ? "Duplicate" : "Duplicato"}</Badge>}</Group><Button disabled={preview.errorCount > 0 || Boolean(preview.duplicateBatchId)} loading={commit.isPending} onClick={() => commit.mutate()}>{i18n.language === "en" ? "Commit" : "Conferma"}</Button></Group><Table.ScrollContainer minWidth={620}><Table mt="md"><Table.Thead><Table.Tr><Table.Th>#</Table.Th><Table.Th>{t("employee")}</Table.Th><Table.Th>Account</Table.Th><Table.Th>{t("amount")}</Table.Th><Table.Th>{i18n.language === "en" ? "Validation" : "Verifica"}</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{preview.rows.slice(0, 25).map((row) => <Table.Tr key={row.rowNumber}><Table.Td>{row.rowNumber}</Table.Td><Table.Td>{row.employeeNumber}</Table.Td><Table.Td>{row.accountCode}</Table.Td><Table.Td>{row.amount}</Table.Td><Table.Td>{row.errors.join(", ") || "OK"}</Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper>}
         <SimpleGrid cols={{ base: 1, lg: 2 }}>
-          <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Approved future absences" : "Assenze future già approvate"}</Title><FileInput mt="md" label={t("chooseFile")} accept=".csv,.xlsx,.xls" value={futureFile} onChange={setFutureFile} leftSection={<Upload size={16} />} /><Group justify="flex-end" mt="md"><Button variant="light" disabled={!futureFile} loading={importFuture.isPending} onClick={() => importFuture.mutate()}>{i18n.language === "en" ? "Import" : "Importa"}</Button></Group></Paper>
+          <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Approved future absences" : "Assenze future già approvate"}</Title><FileInput mt="md" label={t("chooseFile")} accept=".csv,.xlsx,.xls" value={futureFile} onChange={(value) => { setFutureFile(value); setFutureErrors([]); }} leftSection={<Upload size={16} />} />{futureErrors.length > 0 && <Alert color="red" mt="md" title={i18n.language === "en" ? "File not imported" : "File non importato"}><Stack gap={4}>{futureErrors.slice(0, 8).map((error) => <Text size="sm" key={`${error.rowNumber}-${error.code}`}>{i18n.language === "en" ? "Row" : "Riga"} {error.rowNumber}: {error.code}{error.conflictingRowNumber ? ` (${i18n.language === "en" ? "conflicts with row" : "in conflitto con la riga"} ${error.conflictingRowNumber})` : ""}</Text>)}{futureErrors.length > 8 && <Text size="sm">+{futureErrors.length - 8} {i18n.language === "en" ? "more errors" : "altri errori"}</Text>}</Stack></Alert>}<Group justify="flex-end" mt="md"><Button variant="light" disabled={!futureFile} loading={importFuture.isPending} onClick={() => importFuture.mutate()}>{i18n.language === "en" ? "Import" : "Importa"}</Button></Group></Paper>
           <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Manual adjustment" : "Rettifica manuale"}</Title><Stack mt="md"><Select searchable label={t("employee")} value={adjustment.employeeId} onChange={(value) => setAdjustment({ ...adjustment, employeeId: value ?? "" })} data={data.data?.employees.map((entry) => ({ value: entry.id, label: entry.displayName })) ?? []} /><SimpleGrid cols={2}><Select label="Account" value={adjustment.accountCode} onChange={(value) => setAdjustment({ ...adjustment, accountCode: value ?? "FERIE" })} data={["FERIE", "EX_FESTIVITA", "PERMESSO"]} /><NumberInput label={t("amount")} value={adjustment.amount} onChange={(value) => setAdjustment({ ...adjustment, amount: value })} /></SimpleGrid><DateInput {...dateInputProps} label={t("startDate")} value={adjustment.effectiveDate} onChange={(value) => setAdjustment({ ...adjustment, effectiveDate: toDateOnlyString(value) ?? "" })} /><Textarea label={i18n.language === "en" ? "Reason" : "Motivo"} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.currentTarget.value })} /><Group justify="flex-end"><Button disabled={!adjustment.employeeId || !adjustment.amount || adjustment.reason.length < 3} loading={adjust.isPending} onClick={() => adjust.mutate()}>{t("save")}</Button></Group></Stack></Paper>
         </SimpleGrid>
       </Stack></Tabs.Panel>

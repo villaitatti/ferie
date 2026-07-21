@@ -75,6 +75,28 @@ export interface RequestListItem {
   allocations?: Array<{ accountCode: string; amount: number }>;
 }
 
+export interface RequestDecision {
+  id: string;
+  actorName: string;
+  action: string;
+  fromStatus: WorkflowStatus | null;
+  toStatus: WorkflowStatus;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface RequestDetail extends RequestListItem {
+  allocations: Array<{ accountCode: string; amount: number }>;
+  decisions: RequestDecision[];
+  permissions: {
+    canDecide: boolean;
+    canModify: boolean;
+    canWithdraw: boolean;
+    canRequestCancellation: boolean;
+    approvalContext: boolean;
+  };
+}
+
 export interface RequestCalendarHoliday {
   code: string;
   kind: "NATIONAL" | "LOCAL" | "CENTRE" | "CUSTOM";

@@ -23,6 +23,9 @@ button, input { letter-spacing: 0; }
 .balance-value { font-size: 1.75rem; line-height: 1.25; font-weight: 800; margin-top: 4px; }
 .request-row { padding: 16px 18px; background: white; }
 .request-main { min-width: 0; }
+.request-detail-grid > section { min-width: 0; }
+.request-history-entry { padding-bottom: 14px; border-bottom: 1px solid #e1e6e3; }
+.request-history-entry:last-child { padding-bottom: 0; border-bottom: 0; }
 .empty-state { min-height: 180px; border: 1px dashed #c7d0cb; background: #fafcfb; display: grid; place-items: center; align-content: center; gap: 12px; text-align: center; border-radius: 6px; padding: 24px; }
 .calendar-shell { padding: 18px; background: white; border: 1px solid #dce2df; border-radius: 6px; overflow: hidden; }
 .request-date-picker { width: 100%; padding-block: 4px 6px; }

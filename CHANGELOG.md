@@ -21,6 +21,7 @@ All notable changes to the Ferie Portal are documented in this file.
 - Standardized human-readable dates as `DD MMMM YYYY`, with localized month names.
 - Pending requests now reserve balance availability while the approved-only projection remains visible separately.
 - Hourly permission requests can span unpaid schedule breaks and deduct only scheduled working minutes.
+- Future-absence files now validate completely and commit atomically, with row-level errors and no partial imports.
 
 ### Fixed
 
@@ -32,6 +33,8 @@ All notable changes to the Ferie Portal are documented in this file.
 - Removed the production PostgreSQL host-port binding; the database is accessible only on the internal container network.
 - Redacted absence and administration routes, query strings, credentials, and raw protected-route errors from technical HTTP logs.
 - Recorded audit actor roles from the current Employee Directory mirror instead of potentially stale JWT claims.
+- Made emailed request links open an authorized request detail with workflow history and available actions.
+- Enabled Auth0 sign-out and preserved request deep links through the authentication redirect.
 - Limited directory reassignment notifications to recipients added by an actual approver change.
 - Refused demo authentication in production, required complete Auth0 JWT configuration, and mapped JWT failures to HTTP 401.
 

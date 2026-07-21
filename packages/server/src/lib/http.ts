@@ -4,7 +4,7 @@ import { logger } from "./logger.js";
 import { protectedLogPrefix, sanitizeLogUrl, technicalErrorDescriptor } from "./http-logging.js";
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message = code) {
+  constructor(public status: number, public code: string, message = code, public details?: unknown) {
     super(message);
   }
 }
@@ -14,7 +14,11 @@ export const asyncHandler = (handler: (request: Request, response: Response, nex
 
 export function errorHandler(error: unknown, request: Request, response: Response, _next: NextFunction) {
   if (error instanceof ZodError) return response.status(400).json({ code: "VALIDATION_ERROR", issues: error.issues });
-  if (error instanceof HttpError) return response.status(error.status).json({ code: error.code, message: error.message });
+  if (error instanceof HttpError) return response.status(error.status).json({
+    code: error.code,
+    message: error.message,
+    ...(error.details === undefined ? {} : { details: error.details }),
+  });
   if (typeof error === "object" && error !== null && "name" in error && error.name === "UnauthorizedError") {
     return response.status(401).json({ code: "UNAUTHORIZED" });
   }
