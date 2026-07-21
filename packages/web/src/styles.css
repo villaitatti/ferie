@@ -85,7 +85,7 @@ button, input { letter-spacing: 0; }
   .mobile-nav button.active { color: #174b3a; }
   .mobile-nav button span { position: relative; height: 22px; }
   .mobile-nav button i { position: absolute; left: 14px; top: -6px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #b94132; color: white; font-size: 10px; font-style: normal; line-height: 16px; }
-  .mobile-nav small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+  .mobile-nav small { max-width: 100%; overflow: hidden; white-space: normal; overflow-wrap: anywhere; font-size: 10px; line-height: 1.05; text-align: center; }
   .request-row > .mantine-Group-root { align-items: flex-start; }
   .request-stepper { padding-inline: 0; }
   .allocation-field { padding: 16px 0; }

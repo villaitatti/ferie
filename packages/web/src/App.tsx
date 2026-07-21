@@ -1,12 +1,13 @@
 import { ActionIcon, AppShell, Avatar, Burger, Group, Menu, NavLink, Select, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Gauge, Languages, LogOut, Network, Plus, Settings } from "lucide-react";
+import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Network, Plus, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { api, type MeResponse } from "./api";
 import { PageLoader } from "./components";
+import { splitMobileNavigation } from "./mobile-navigation";
 
 const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
 const NewRequest = lazy(() => import("./pages/NewRequest").then((module) => ({ default: module.NewRequest })));
@@ -55,6 +56,9 @@ export function App() {
   const nav = navigation.map(({ path, label, icon: Icon, badge }) => (
     <NavLink key={path} label={label} leftSection={<Icon size={19} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} active={location.pathname === path} onClick={() => { navigate(path); close(); }} />
   ));
+  const mobileNavigation = splitMobileNavigation(navigation);
+  const mobileOverflowActive = mobileNavigation.overflow.some((entry) => entry.path === location.pathname);
+  const mobileOverflowBadge = mobileNavigation.overflow.reduce((sum, entry) => sum + (entry.badge ?? 0), 0);
 
   return (
     <AppShell header={{ height: 64 }} navbar={{ width: 244, breakpoint: "sm", collapsed: { mobile: !opened } }} padding={0}>
@@ -93,7 +97,15 @@ export function App() {
         <Route path="/integrations" element={me.data.capabilities.canInspectIntegrations ? <Integrations /> : <Navigate to="/" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes></Suspense></main></AppShell.Main>
-      <nav className="mobile-nav">{navigation.slice(0, 5).map(({ path, label, icon: Icon, badge }) => <button key={path} className={location.pathname === path ? "active" : ""} onClick={() => navigate(path)}><span><Icon size={20} />{badge ? <i>{badge}</i> : null}</span><small>{label}</small></button>)}</nav>
+      <nav className="mobile-nav" aria-label={i18n.language === "en" ? "Primary navigation" : "Navigazione principale"}>
+        {mobileNavigation.primary.map(({ path, label, icon: Icon, badge }) => <button key={path} className={location.pathname === path ? "active" : ""} onClick={() => navigate(path)}><span><Icon size={20} />{badge ? <i>{badge}</i> : null}</span><small>{label}</small></button>)}
+        {mobileNavigation.overflow.length > 0 && <Menu position="top-end" width={230} withinPortal>
+          <Menu.Target><button className={mobileOverflowActive ? "active" : ""} aria-label={t("more")}><span><Ellipsis size={22} />{mobileOverflowBadge ? <i>{mobileOverflowBadge}</i> : null}</span><small>{t("more")}</small></button></Menu.Target>
+          <Menu.Dropdown>
+            {mobileNavigation.overflow.map(({ path, label, icon: Icon, badge }) => <Menu.Item key={path} leftSection={<Icon size={18} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} color={location.pathname === path ? "forest" : undefined} onClick={() => navigate(path)}>{label}</Menu.Item>)}
+          </Menu.Dropdown>
+        </Menu>}
+      </nav>
     </AppShell>
   );
 }

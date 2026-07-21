@@ -28,6 +28,7 @@ All notable changes to the Ferie Portal are documented in this file.
 - Added optimistic status guards for withdrawals, cancellations, approvals, and revision-parent transitions.
 - Prevented HR-created sensitive absences from overlapping active requests, including concurrent submissions.
 - Validated custom holiday rules and protected seeded national, local, and centre rules from administrative overwrite.
+- Kept all authorized administration and integration destinations reachable from mobile navigation.
 - Limited directory reassignment notifications to recipients added by an actual approver change.
 - Refused demo authentication in production, required complete Auth0 JWT configuration, and mapped JWT failures to HTTP 401.
 
