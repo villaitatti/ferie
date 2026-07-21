@@ -420,16 +420,26 @@ export async function submitRequest(request: Request, raw: unknown) {
   return serializeRequest(await getRequest(created.id));
 }
 
-async function getRequest(id: string, db: PortalDb = prisma) {
+const requestDetailsInclude = {
+  employee: { include: { department: true } },
+  absenceType: true,
+  allocations: { include: { account: true } },
+  segments: true,
+  decisions: { orderBy: { createdAt: "asc" as const } },
+} satisfies Prisma.AbsenceRequestInclude;
+
+type RequestWithDetails = Prisma.AbsenceRequestGetPayload<{ include: typeof requestDetailsInclude }>;
+
+async function getRequest(id: string, db: PortalDb = prisma): Promise<RequestWithDetails> {
   const result = await db.absenceRequest.findUnique({
     where: { id },
-    include: { employee: { include: { department: true } }, absenceType: true, allocations: { include: { account: true } }, segments: true, decisions: { orderBy: { createdAt: "asc" } } },
+    include: requestDetailsInclude,
   });
   if (!result) throw new HttpError(404, "REQUEST_NOT_FOUND");
   return result;
 }
 
-function serializeRequest(entry: Awaited<ReturnType<typeof getRequest>>): RequestListItem & Record<string, unknown> {
+function serializeRequest(entry: RequestWithDetails): RequestListItem & Record<string, unknown> {
   return {
     id: entry.id,
     employeeId: entry.employeeId,
@@ -492,8 +502,8 @@ export async function getRequestDetail(request: Request, id: string): Promise<Re
 
 export async function listMyRequests(request: Request) {
   const employee = await actorEmployee(request);
-  const entries = await prisma.absenceRequest.findMany({ where: { employeeId: employee.id }, orderBy: { createdAt: "desc" }, select: { id: true } });
-  return Promise.all(entries.map(async (entry) => serializeRequest(await getRequest(entry.id))));
+  const entries = await prisma.absenceRequest.findMany({ where: { employeeId: employee.id }, orderBy: { createdAt: "desc" }, include: requestDetailsInclude });
+  return entries.map(serializeRequest);
 }
 
 export async function listApprovals(request: Request) {
@@ -507,9 +517,9 @@ export async function listApprovals(request: Request) {
       ],
     },
     orderBy: { submittedAt: "asc" },
-    select: { id: true },
+    include: requestDetailsInclude,
   });
-  return Promise.all(entries.map(async (entry) => serializeRequest(await getRequest(entry.id))));
+  return entries.map(serializeRequest);
 }
 
 export async function decideRequest(request: Request, id: string, raw: unknown) {

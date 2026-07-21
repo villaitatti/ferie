@@ -35,6 +35,7 @@ All notable changes to the Ferie Portal are documented in this file.
 - Recorded audit actor roles from the current Employee Directory mirror instead of potentially stale JWT claims.
 - Made emailed request links open an authorized request detail with workflow history and available actions.
 - Enabled Auth0 sign-out and preserved request deep links through the authentication redirect.
+- Removed per-request follow-up queries from personal request lists and approval inboxes.
 - Limited directory reassignment notifications to recipients added by an actual approver change.
 - Refused demo authentication in production, required complete Auth0 JWT configuration, and mapped JWT failures to HTTP 401.
 
