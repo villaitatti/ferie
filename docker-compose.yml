@@ -38,8 +38,6 @@ services:
       POSTGRES_DB: ferie
       POSTGRES_USER: ferie
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -55,6 +53,7 @@ services:
 networks:
   internal:
     driver: bridge
+    internal: true
   itatti-tunnel:
     external: true
 

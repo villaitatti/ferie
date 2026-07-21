@@ -33,6 +33,8 @@ Normal approval is a single peer decision, not a pre-approver-to-responsabile ch
 
 Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. The server refuses to start in production with demo authentication or incomplete Auth0 JWT configuration. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
 
+Production PostgreSQL is reachable only from the Compose `internal` network. Port `5433` is published by `docker-compose.dev.yml` for local development only.
+
 Run migrations before starting a new image:
 
 ```bash
