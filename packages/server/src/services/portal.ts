@@ -10,6 +10,7 @@ import {
   decisionSchema,
   easterSunday,
   futureAbsenceImportSchema,
+  holidayRuleUpsertSchema,
   requestPreviewSchema,
   requestCalendarRangeSchema,
   resolveDecisionTransition,
@@ -761,23 +762,24 @@ export async function listHolidayRules(request: Request) {
   return prisma.holidayRule.findMany({ orderBy: [{ kind: "asc" }, { code: "asc" }] });
 }
 
-export async function upsertHolidayRule(request: Request, raw: Record<string, unknown>) {
+export async function upsertHolidayRule(request: Request, raw: unknown) {
   const actor = await actorEmployee(request);
   if (!actor.roles.includes("FERIE_PORTAL_ADMIN")) throw new HttpError(403, "ADMIN_REQUIRED");
-  const code = String(raw.code ?? "").trim().toUpperCase();
-  if (!code) throw new HttpError(400, "HOLIDAY_CODE_REQUIRED");
+  const input = holidayRuleUpsertSchema.parse(raw);
+  const existing = await prisma.holidayRule.findUnique({ where: { code: input.code } });
+  if (existing && existing.kind !== "CUSTOM") throw new HttpError(409, "PROTECTED_HOLIDAY_RULE");
   const data = {
-    labelIt: String(raw.labelIt ?? ""),
-    labelEn: String(raw.labelEn ?? ""),
-    kind: String(raw.kind ?? "CUSTOM") as "CUSTOM",
-    recurrence: String(raw.recurrence ?? "ONE_OFF") as "ONE_OFF",
-    oneOffDate: typeof raw.oneOffDate === "string" ? dbDate(raw.oneOffDate) : null,
-    month: typeof raw.month === "number" ? raw.month : null,
-    day: typeof raw.day === "number" ? raw.day : null,
-    easterOffset: typeof raw.easterOffset === "number" ? raw.easterOffset : null,
-    active: raw.active !== false,
+    labelIt: input.labelIt,
+    labelEn: input.labelEn,
+    kind: input.kind,
+    recurrence: input.recurrence,
+    oneOffDate: input.recurrence === "ONE_OFF" ? dbDate(input.oneOffDate) : null,
+    month: input.recurrence === "FIXED_ANNUAL" ? input.month : null,
+    day: input.recurrence === "FIXED_ANNUAL" ? input.day : null,
+    easterOffset: input.recurrence === "EASTER_OFFSET" ? input.easterOffset : null,
+    active: input.active,
   };
-  const result = await prisma.holidayRule.upsert({ where: { code }, create: { code, ...data }, update: data });
-  await audit(request, "HOLIDAY_RULE_UPSERTED", "HolidayRule", result.id, { code });
+  const result = await prisma.holidayRule.upsert({ where: { code: input.code }, create: { code: input.code, ...data }, update: data });
+  await audit(request, "HOLIDAY_RULE_UPSERTED", "HolidayRule", result.id, { code: input.code, recurrence: input.recurrence });
   return result;
 }

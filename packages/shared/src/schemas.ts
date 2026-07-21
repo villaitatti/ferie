@@ -68,6 +68,27 @@ export const sensitiveAbsenceSchema = z.object({
   endDate: dateOnly,
 });
 
+const holidayRuleBase = {
+  code: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/).transform((value) => value.toUpperCase()),
+  labelIt: z.string().trim().min(1).max(160),
+  labelEn: z.string().trim().min(1).max(160),
+  kind: z.literal("CUSTOM"),
+  active: z.boolean().default(true),
+};
+
+export const holidayRuleUpsertSchema = z.discriminatedUnion("recurrence", [
+  z.object({ ...holidayRuleBase, recurrence: z.literal("ONE_OFF"), oneOffDate: validCalendarDate }).strict(),
+  z.object({ ...holidayRuleBase, recurrence: z.literal("FIXED_ANNUAL"), month: z.number().int().min(1).max(12), day: z.number().int().min(1).max(31) }).strict(),
+  z.object({ ...holidayRuleBase, recurrence: z.literal("EASTER_OFFSET"), easterOffset: z.number().int().min(-60).max(60) }).strict(),
+]).superRefine((input, context) => {
+  if (input.recurrence !== "FIXED_ANNUAL") return;
+  try {
+    Temporal.PlainDate.from({ year: 2025, month: input.month, day: input.day }, { overflow: "reject" });
+  } catch {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Expected a valid annual month and day", path: ["day"] });
+  }
+});
+
 export const balanceImportRowSchema = z.object({
   employeeNumber: z.string().min(1),
   accountCode: z.enum(["FERIE", "EX_FESTIVITA", "PERMESSO"]),
@@ -107,6 +128,7 @@ export type RequestPreviewInput = z.infer<typeof requestPreviewSchema>;
 export type SubmitRequestInput = z.infer<typeof submitRequestSchema>;
 export type DecisionInput = z.infer<typeof decisionSchema>;
 export type SensitiveAbsenceInput = z.infer<typeof sensitiveAbsenceSchema>;
+export type HolidayRuleUpsertInput = z.infer<typeof holidayRuleUpsertSchema>;
 export type BalanceImportInput = z.infer<typeof balanceImportSchema>;
 export type BalanceAdjustmentInput = z.infer<typeof balanceAdjustmentSchema>;
 export type FutureAbsenceImportInput = z.infer<typeof futureAbsenceImportSchema>;
