@@ -18,11 +18,24 @@ vi.mock("../components/RequestDatePicker", () => ({
   RequestDatePicker: ({ startDate, onChange }: { startDate: string; onChange: (startDate: string, endDate: string) => void }) => <>
     <span data-testid="picker-start-date">{startDate}</span>
     <button type="button" onClick={() => onChange("2026-08-03", "2026-08-07")}>Select dates</button>
+    <button type="button" onClick={() => onChange("2026-08-03", "2026-08-03")}>Select day</button>
   </>,
 }));
 
 const me: MeResponse = {
-  employee: { id: "employee", displayName: "Andrea Caselli", email: "andrea@example.org", title: null, departmentName: "Research", fte: 1, roles: [], schedule: [] },
+  employee: {
+    id: "employee",
+    displayName: "Andrea Caselli",
+    email: "andrea@example.org",
+    title: null,
+    departmentName: "Research",
+    fte: 1,
+    roles: [],
+    schedule: [1, 2, 3, 4, 5].flatMap((weekday) => [
+      { weekday, start: "09:00", end: "13:00" },
+      { weekday, start: "13:30", end: "17:00" },
+    ]),
+  },
   balances: [],
   capabilities: { canApprove: false, canFinalApprove: false, canAdminister: false, canInspectIntegrations: false },
   pendingApprovals: 0,
@@ -84,5 +97,15 @@ describe("NewRequest", () => {
 
     fireEvent.click(screen.getByText("Hourly leave"));
     expect(screen.getByTestId("picker-start-date").textContent).toBe("");
+    expect(screen.queryByRole("textbox", { name: "Start time" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "End time" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Select day" }));
+    expect(screen.getByRole("textbox", { name: "Start time" })).not.toBeNull();
+    expect(screen.queryByRole("textbox", { name: "End time" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("textbox", { name: "Start time" }));
+    fireEvent.click(await screen.findByRole("option", { name: "09:00" }));
+    expect(screen.getByRole("textbox", { name: "End time" })).not.toBeNull();
   });
 });

@@ -1,9 +1,13 @@
 import { AppRole, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const schedule = [1, 2, 3, 4, 5].flatMap((weekday) => [
+const standardSchedule = [1, 2, 3, 4, 5].flatMap((weekday) => [
   { weekday, start: "09:00", end: "13:00" },
   { weekday, start: "13:30", end: "17:00" },
+]);
+const earlySchedule = [1, 2, 3, 4, 5].flatMap((weekday) => [
+  { weekday, start: "07:30", end: "12:00" },
+  { weekday, start: "12:30", end: "15:30" },
 ]);
 
 async function main() {
@@ -18,18 +22,19 @@ async function main() {
     update: { name: "Finance & HR" },
   });
 
-  const employees: Array<{ id: string; sourceId: string; employeeNumber: string; auth0Subject: string; email: string; displayName: string; title: string; departmentId: string; roles: AppRole[] }> = [
-    { id: "emp-andrea", sourceId: "ed-1001", employeeNumber: "1001", auth0Subject: "auth0|demo-employee", email: "andrea.caselli@example.org", displayName: "Andrea Caselli", title: "Digital Projects Manager", departmentId: research.id, roles: [] },
-    { id: "emp-pre", sourceId: "ed-2001", employeeNumber: "2001", auth0Subject: "auth0|demo-approver", email: "preapprover@example.org", displayName: "Elena Bianchi", title: "Program Manager", departmentId: research.id, roles: [] },
-    { id: "emp-resp", sourceId: "ed-2002", employeeNumber: "2002", auth0Subject: "auth0|demo-responsible", email: "responsabile@example.org", displayName: "Marco Rossi", title: "Head of Department", departmentId: research.id, roles: [] },
-    { id: "emp-final", sourceId: "ed-3001", employeeNumber: "3001", auth0Subject: "auth0|demo-final", email: "final.approver@example.org", displayName: "Giulia Conti", title: "Finance Director", departmentId: finance.id, roles: ["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN"] },
-    { id: "emp-it", sourceId: "ed-4001", employeeNumber: "4001", auth0Subject: "auth0|demo-it", email: "it@example.org", displayName: "Luca Romano", title: "Systems Administrator", departmentId: research.id, roles: ["STAFF_IT"] },
+  const employees: Array<{ id: string; sourceId: string; employeeNumber: string; auth0Subject: string; email: string; displayName: string; title: string; departmentId: string; roles: AppRole[]; schedule: typeof standardSchedule }> = [
+    { id: "emp-andrea", sourceId: "ed-1001", employeeNumber: "1001", auth0Subject: "auth0|demo-employee", email: "andrea.caselli@example.org", displayName: "Andrea Caselli", title: "Digital Projects Manager", departmentId: research.id, roles: [], schedule: earlySchedule },
+    { id: "emp-pre", sourceId: "ed-2001", employeeNumber: "2001", auth0Subject: "auth0|demo-approver", email: "preapprover@example.org", displayName: "Elena Bianchi", title: "Program Manager", departmentId: research.id, roles: [], schedule: earlySchedule },
+    { id: "emp-resp", sourceId: "ed-2002", employeeNumber: "2002", auth0Subject: "auth0|demo-responsible", email: "responsabile@example.org", displayName: "Marco Rossi", title: "Head of Department", departmentId: research.id, roles: [], schedule: standardSchedule },
+    { id: "emp-final", sourceId: "ed-3001", employeeNumber: "3001", auth0Subject: "auth0|demo-final", email: "final.approver@example.org", displayName: "Giulia Conti", title: "Finance Director", departmentId: finance.id, roles: ["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN"], schedule: standardSchedule },
+    { id: "emp-it", sourceId: "ed-4001", employeeNumber: "4001", auth0Subject: "auth0|demo-it", email: "it@example.org", displayName: "Luca Romano", title: "Systems Administrator", departmentId: research.id, roles: ["STAFF_IT"], schedule: earlySchedule },
   ];
   for (const employee of employees) {
+    const { schedule, ...identity } = employee;
     await prisma.employeeMirror.upsert({
       where: { sourceId: employee.sourceId },
-      create: { ...employee, roles: [...employee.roles], status: "ACTIVE", fte: 1, schedule, sourceUpdatedAt: new Date() },
-      update: { employeeNumber: employee.employeeNumber, auth0Subject: employee.auth0Subject, email: employee.email, displayName: employee.displayName, title: employee.title, departmentId: employee.departmentId, roles: [...employee.roles], schedule, status: "ACTIVE", sourceUpdatedAt: new Date() },
+      create: { ...identity, roles: [...identity.roles], status: "ACTIVE", fte: 1, schedule, sourceUpdatedAt: new Date() },
+      update: { employeeNumber: identity.employeeNumber, auth0Subject: identity.auth0Subject, email: identity.email, displayName: identity.displayName, title: identity.title, departmentId: identity.departmentId, roles: [...identity.roles], schedule, status: "ACTIVE", sourceUpdatedAt: new Date() },
     });
   }
 
@@ -104,7 +109,7 @@ async function main() {
       status: "APPROVED",
       provenance: "EXTERNAL_IMPORT",
       reconciliationStatus: "MATCHED",
-      employeeSnapshot: { employeeNumber: "1001", displayName: "Andrea Caselli", departmentId: research.id, departmentName: research.name, fte: 1, schedule },
+      employeeSnapshot: { employeeNumber: "1001", displayName: "Andrea Caselli", departmentId: research.id, departmentName: research.name, fte: 1, schedule: earlySchedule },
       calculationSnapshot: { sourceName: "Demo opening data", segments: [{ date: "2026-11-09", quantity: 1 }, { date: "2026-11-10", quantity: 1 }], allocations: [{ accountCode: "FERIE", amount: 2 }] },
       submittedAt: new Date("2026-06-30T09:00:00Z"),
       resolvedAt: new Date("2026-06-30T09:00:00Z"),

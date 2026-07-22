@@ -57,7 +57,7 @@ describe("RequestDatePicker", () => {
       onChange={() => undefined}
     /></QueryClientProvider></MantineProvider>);
 
-    const input = screen.getByLabelText("Request period");
+    const input = screen.getByLabelText("Leave request period");
     expect(input.textContent).toBe("09 November 2026");
     fireEvent.click(input);
     await screen.findByText("November 2026");

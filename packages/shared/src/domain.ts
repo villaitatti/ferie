@@ -110,16 +110,46 @@ function toMinutes(value: string): number {
   return hour * 60 + minute;
 }
 
-export function validatePermissionInterval(date: string, startTime: string, endTime: string, schedule: WorkInterval[]): number {
+/** At least half an hour of work must remain; a full scheduled day cannot be taken as permesso. */
+export const MIN_REMAINING_WORK_MINUTES = 30;
+
+function workIntervalsForDate(date: string, schedule: WorkInterval[]) {
   const weekday = Temporal.PlainDate.from(date).dayOfWeek;
-  const start = toMinutes(startTime);
-  const end = toMinutes(endTime);
-  minutesBetween(startTime, endTime);
   const intervals = schedule
     .filter((interval) => interval.weekday === weekday)
     .map((interval) => ({ start: toMinutes(interval.start), end: toMinutes(interval.end) }))
     .filter((interval) => interval.end > interval.start)
     .sort((left, right) => left.start - right.start);
+  return mergeWorkIntervals(intervals);
+}
+
+/** Collapse overlapping or contiguous intervals so scheduled length is unique wall-clock minutes. */
+function mergeWorkIntervals(intervals: Array<{ start: number; end: number }>) {
+  if (intervals.length === 0) return [];
+  const merged: Array<{ start: number; end: number }> = [{ ...intervals[0]! }];
+  for (const interval of intervals.slice(1)) {
+    const last = merged[merged.length - 1]!;
+    if (interval.start <= last.end) last.end = Math.max(last.end, interval.end);
+    else merged.push({ ...interval });
+  }
+  return merged;
+}
+
+export function scheduledWorkingMinutes(date: string, schedule: WorkInterval[]): number {
+  return workIntervalsForDate(date, schedule).reduce((sum, interval) => sum + (interval.end - interval.start), 0);
+}
+
+/** Max permesso minutes for a day (e.g. 420 on a 7.5h / 450-minute schedule). */
+export function maxPermissionMinutesForDay(date: string, schedule: WorkInterval[]): number {
+  return Math.max(0, scheduledWorkingMinutes(date, schedule) - MIN_REMAINING_WORK_MINUTES);
+}
+
+export function permissionCoveredMinutes(date: string, startTime: string, endTime: string, schedule: WorkInterval[]): number {
+  const start = toMinutes(startTime);
+  const end = toMinutes(endTime);
+  minutesBetween(startTime, endTime);
+  if (start % 30 !== 0 || end % 30 !== 0) throw new Error("INVALID_PERMISSION_STEP");
+  const intervals = workIntervalsForDate(date, schedule);
   const startIsScheduled = intervals.some((interval) => start >= interval.start && start < interval.end);
   const endIsScheduled = intervals.some((interval) => end > interval.start && end <= interval.end);
   if (!startIsScheduled || !endIsScheduled) throw new Error("OUTSIDE_WORK_SCHEDULE");
@@ -135,6 +165,12 @@ export function validatePermissionInterval(date: string, startTime: string, endT
     }
   }
   if (coveredMinutes === 0) throw new Error("OUTSIDE_WORK_SCHEDULE");
+  return coveredMinutes;
+}
+
+export function validatePermissionInterval(date: string, startTime: string, endTime: string, schedule: WorkInterval[]): number {
+  const coveredMinutes = permissionCoveredMinutes(date, startTime, endTime, schedule);
+  if (coveredMinutes > maxPermissionMinutesForDay(date, schedule)) throw new Error("PERMISSION_EXCEEDS_DAILY_MAX");
   return coveredMinutes;
 }
 

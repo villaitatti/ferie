@@ -90,4 +90,51 @@ describe("future absence imports", () => {
       { ...baseRow, absenceTypeCode: "PERMESSO", startTime: "09:30", endTime: "10:30", allocations: [] },
     )).toBe(true);
   });
+
+  it("rejects batch permesso rows that together exceed the daily cap", async () => {
+    mocks.employeeFindMany.mockResolvedValue([{
+      id: "employee-1",
+      employeeNumber: "1001",
+      displayName: "Andrea Caselli",
+      departmentId: "department-1",
+      department: { name: "Research" },
+      status: "ACTIVE",
+      fte: 1,
+      schedule: [
+        { weekday: 1, start: "09:00", end: "13:00" },
+        { weekday: 1, start: "13:30", end: "17:00" },
+      ],
+    }]);
+    mocks.typeFindMany.mockResolvedValue([{ id: "type-permesso", code: "PERMESSO", active: true }]);
+
+    await expect(importFutureAbsences(request, {
+      sourceName: "future-absence.csv",
+      rows: [
+        {
+          employeeNumber: "1001",
+          absenceTypeCode: "PERMESSO",
+          startDate: "2026-08-03",
+          endDate: "2026-08-03",
+          startTime: "09:00",
+          endTime: "13:00",
+          allocations: [],
+        },
+        {
+          employeeNumber: "1001",
+          absenceTypeCode: "PERMESSO",
+          startDate: "2026-08-03",
+          endDate: "2026-08-03",
+          startTime: "13:30",
+          endTime: "17:00",
+          allocations: [],
+        },
+      ],
+    })).rejects.toMatchObject({
+      status: 400,
+      code: "IMPORT_HAS_ERRORS",
+      details: { errors: [{ rowNumber: 2, code: "PERMISSION_EXCEEDS_DAILY_MAX" }] },
+    });
+
+    expect(mocks.requestCreate).not.toHaveBeenCalled();
+  });
 });

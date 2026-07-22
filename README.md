@@ -25,9 +25,9 @@ pnpm dev
 
 Open `http://localhost:5173`. Development defaults to demo authentication. The profile menu switches between staff, pre-approver, department head, HR/final approver, and IT identities.
 
-The seeded schedule is Monday-Friday, 09:00-13:00 and 13:30-17:00. Seed balances are authoritative imports as of 30 June 2026. Do not use demo authentication in production.
+The seeded default identity (Andrea) uses an early schedule starting at 07:30 (07:30–12:00 and 12:30–15:30). Marco and Giulia use the standard 09:00–13:00 / 13:30–17:00 day. In production, permesso time options come from each employee's ED work intervals. Seed balances are authoritative imports as of 30 June 2026. Do not use demo authentication in production.
 
-Day-based absences follow the employee's ED schedule: each scheduled working date counts as one day regardless of FTE. FTE is mirrored and snapshotted for context and audit, but does not prorate request quantities or imported entitlements. Hourly permissions deduct only minutes covered by ED work intervals, so HR must maintain the actual working days and intervals for part-time employees in ED.
+Day-based absences follow the employee's ED schedule: each scheduled working date counts as one day regardless of FTE. FTE is mirrored and snapshotted for context and audit, but does not prorate request quantities or imported entitlements. Hourly permissions deduct only minutes covered by ED work intervals, so HR must maintain the actual working days and intervals for part-time employees in ED. Permesso cannot cover a full working day: at least 30 minutes of scheduled work must remain (so a 7.5-hour day allows at most 7 hours of permesso).
 
 Normal approval is a single peer decision, not a pre-approver-to-responsabile chain. All configured pre-approvers are notified, or all responsabili when no pre-approver exists; either group and any configured substitute may decide, while substitutes are not part of the default notification audience.
 

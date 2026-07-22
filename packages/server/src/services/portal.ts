@@ -17,6 +17,7 @@ import {
   sensitiveAbsenceSchema,
   submitRequestSchema,
   validatePermissionInterval,
+  maxPermissionMinutesForDay,
   type BalanceSummary,
   type FutureAbsenceImportInput,
   type RequestDetail,
@@ -281,6 +282,7 @@ async function calculateRequestPreview(
   input: RequestPreviewInput,
   excludeRequestId: string | undefined,
   db: PortalDb,
+  options?: { reservedPermissionMinutes?: number },
 ) {
   if (employee.status !== "ACTIVE") throw new HttpError(409, "EMPLOYEE_INACTIVE");
   await checkOverlap(db, employee.id, input, excludeRequestId);
@@ -296,6 +298,20 @@ async function calculateRequestPreview(
     if (holidays.has(input.startDate)) throw new HttpError(400, "NON_WORKING_DAY");
     try { quantity = validatePermissionInterval(input.startDate, input.startTime, input.endTime, schedule); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "INVALID_TIME_INTERVAL"); }
+    const otherPermissionMinutes = (await db.absenceRequest.findMany({
+      where: {
+        employeeId: employee.id,
+        id: excludeRequestId ? { not: excludeRequestId } : undefined,
+        status: { in: [...activeStatuses] },
+        startDate: dbDate(input.startDate),
+        endDate: dbDate(input.startDate),
+        absenceType: { code: "PERMESSO" },
+      },
+      select: { quantity: true },
+    })).reduce((sum, entry) => sum + Number(entry.quantity), 0);
+    if (quantity + otherPermissionMinutes + (options?.reservedPermissionMinutes ?? 0) > maxPermissionMinutesForDay(input.startDate, schedule)) {
+      throw new HttpError(400, "PERMISSION_EXCEEDS_DAILY_MAX");
+    }
     unit = "MINUTES";
     segments = [{ date: input.startDate, quantity }];
     allocations = [{ accountCode: "PERMESSO", amount: quantity }];
@@ -768,6 +784,7 @@ export async function importFutureAbsences(request: Request, raw: unknown) {
     const unavailableReferences = new Set(existingReferences.map((entry) => entry.externalReference).filter((value): value is string => Boolean(value)));
     const seenReferences = new Map<string, number>();
     const errors: FutureImportError[] = [];
+    const preparedPermissionMinutes = new Map<string, number>();
     const prepared: Array<{
       rowNumber: number;
       row: FutureImportRow;
@@ -800,12 +817,19 @@ export async function importFutureAbsences(request: Request, raw: unknown) {
           : { ...row, employeeId: employee.id, allocations: row.allocations };
         const parsedPreview = requestPreviewSchema.safeParse(previewInput);
         if (!parsedPreview.success) throw new HttpError(400, "INVALID_REQUEST_ROW");
-        const preview = await calculateRequestPreview(employee, parsedPreview.data, undefined, tx);
+        const permissionKey = `${employee.id}:${parsedPreview.data.startDate}`;
+        const reservedPermissionMinutes = row.absenceTypeCode === "PERMESSO"
+          ? (preparedPermissionMinutes.get(permissionKey) ?? 0)
+          : 0;
+        const preview = await calculateRequestPreview(employee, parsedPreview.data, undefined, tx, { reservedPermissionMinutes });
         const allocations = row.absenceTypeCode === "FERIE" && preview.allocations.length === 0 ? [{ accountCode: "FERIE", amount: preview.quantity }] : preview.allocations;
         if (row.absenceTypeCode === "FERIE" && !allocationsEqualDays(allocations, preview.quantity)) throw new HttpError(400, "ALLOCATIONS_MUST_EQUAL_DEDUCTIBLE_DAYS");
         const conflict = prepared.find((entry) => entry.employee.id === employee.id && futureImportRowsOverlap(entry.row, row));
         if (conflict) { errors.push({ rowNumber, code: "OVERLAPPING_IMPORT_ROWS", conflictingRowNumber: conflict.rowNumber }); continue; }
         prepared.push({ rowNumber, row, employee, absenceTypeId: type.id, preview, allocations });
+        if (row.absenceTypeCode === "PERMESSO") {
+          preparedPermissionMinutes.set(permissionKey, reservedPermissionMinutes + preview.quantity);
+        }
       } catch (error) {
         if (!(error instanceof HttpError)) throw error;
         errors.push({ rowNumber, code: error.code });

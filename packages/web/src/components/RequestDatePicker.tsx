@@ -216,7 +216,7 @@ export function RequestDatePicker({ kind, startDate, endDate, schedule, revision
       allowSingleDateInRange
     /> : <DatePickerInput
       {...sharedProps}
-      label={t("startDate")}
+      label={<Text component="span" className="request-picker-heading">{t("permissionDate")}</Text>}
       placeholder={t("calendarChooseDate")}
       value={startDate || null}
       onChange={(value) => { void handleSingleChange(value); }}

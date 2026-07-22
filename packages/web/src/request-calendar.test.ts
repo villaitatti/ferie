@@ -1,8 +1,12 @@
 import type { RequestCalendarDay, WorkInterval } from "@ferie/shared";
 import { describe, expect, it } from "vitest";
-import { findRequestConflict, formatPortalDate, formatPortalDateRange, formatPortalDateTime, formatPortalDateWithWeekday, formatPortalList, isScheduledWorkday } from "./request-calendar";
+import { findRequestConflict, formatPortalDate, formatPortalDateRange, formatPortalDateTime, formatPortalDateWithWeekday, formatPortalList, isScheduledWorkday, permissionEndSlots, permissionStartSlots } from "./request-calendar";
 
 const schedule: WorkInterval[] = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: "09:00", end: "17:00" }));
+const splitSchedule: WorkInterval[] = [1, 2, 3, 4, 5].flatMap((weekday) => [
+  { weekday, start: "09:00", end: "13:00" },
+  { weekday, start: "13:30", end: "17:00" },
+]);
 
 const days: RequestCalendarDay[] = [
   {
@@ -54,5 +58,36 @@ describe("request calendar selection helpers", () => {
 
   it("allows ranges that only cross non-working days", () => {
     expect(findRequestConflict(days, "2026-07-24", "2026-07-27")).toBeNull();
+  });
+
+  it("builds half-hour permission slots from the work schedule", () => {
+    expect(permissionStartSlots("2026-07-20", schedule).slice(0, 3)).toEqual(["09:00", "09:30", "10:00"]);
+    expect(permissionStartSlots("2026-07-20", schedule).at(-1)).toBe("16:30");
+    expect(permissionEndSlots("2026-07-20", schedule, "16:00")).toEqual(["16:30", "17:00"]);
+    expect(permissionStartSlots("2026-07-20", splitSchedule)).toContain("12:30");
+    expect(permissionStartSlots("2026-07-20", splitSchedule)).toContain("13:30");
+    expect(permissionStartSlots("2026-07-20", splitSchedule)).not.toContain("13:00");
+    expect(permissionEndSlots("2026-07-20", splitSchedule, "12:00")).toEqual([
+      "12:30", "13:00", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00",
+    ]);
+  });
+
+  it("includes early starts such as 07:30 from the employee's ED schedule", () => {
+    const earlySchedule: WorkInterval[] = [1, 2, 3, 4, 5].flatMap((weekday) => [
+      { weekday, start: "07:30", end: "12:00" },
+      { weekday, start: "12:30", end: "15:30" },
+    ]);
+    expect(permissionStartSlots("2026-07-20", earlySchedule).slice(0, 3)).toEqual(["07:30", "08:00", "08:30"]);
+    expect(permissionEndSlots("2026-07-20", earlySchedule, "07:30")).toEqual([
+      "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00",
+      "13:00", "13:30", "14:00", "14:30", "15:00",
+    ]);
+    expect(permissionEndSlots("2026-07-20", earlySchedule, "07:30")).not.toContain("15:30");
+    expect(permissionStartSlots("2026-07-20", earlySchedule)).not.toContain("07:00");
+  });
+
+  it("does not offer a full-day permesso end time on a 7.5h schedule", () => {
+    expect(permissionEndSlots("2026-07-20", splitSchedule, "09:00")).not.toContain("17:00");
+    expect(permissionEndSlots("2026-07-20", splitSchedule, "09:00")).toContain("16:30");
   });
 });

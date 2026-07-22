@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocationsEqualDays, calculateBalanceAvailability, calculateVacationDays, holidaysForYear, validatePermissionInterval } from "./domain.js";
+import { allocationsEqualDays, calculateBalanceAvailability, calculateVacationDays, holidaysForYear, maxPermissionMinutesForDay, validatePermissionInterval } from "./domain.js";
 
 const schedule = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: "09:00", end: "16:30" }));
 
@@ -33,6 +33,32 @@ describe("absence calculations", () => {
     expect(allocationsEqualDays([{ amount: 3 }, { amount: 1 }], 4)).toBe(true);
     expect(validatePermissionInterval("2026-07-20", "09:30", "11:00", schedule)).toBe(90);
     expect(() => validatePermissionInterval("2026-07-20", "08:30", "09:30", schedule)).toThrow("OUTSIDE_WORK_SCHEDULE");
+    expect(() => validatePermissionInterval("2026-07-20", "09:15", "10:00", schedule)).toThrow("INVALID_PERMISSION_STEP");
+    const earlySchedule = [
+      { weekday: 1, start: "07:30", end: "12:00" },
+      { weekday: 1, start: "12:30", end: "16:00" },
+    ];
+    expect(validatePermissionInterval("2026-07-20", "07:30", "08:30", earlySchedule)).toBe(60);
+  });
+
+  it("rejects a full scheduled day of permesso and caps at scheduled minutes minus 30", () => {
+    const fullTime = [
+      { weekday: 1, start: "09:00", end: "13:00" },
+      { weekday: 1, start: "13:30", end: "17:00" },
+    ];
+    expect(maxPermissionMinutesForDay("2026-07-20", fullTime)).toBe(420);
+    expect(validatePermissionInterval("2026-07-20", "09:00", "16:30", fullTime)).toBe(420);
+    expect(() => validatePermissionInterval("2026-07-20", "09:00", "17:00", fullTime)).toThrow("PERMISSION_EXCEEDS_DAILY_MAX");
+  });
+
+  it("merges overlapping schedule intervals before computing the daily permesso cap", () => {
+    const overlapping = [
+      { weekday: 1, start: "09:00", end: "13:00" },
+      { weekday: 1, start: "12:00", end: "17:00" },
+    ];
+    expect(maxPermissionMinutesForDay("2026-07-20", overlapping)).toBe(450);
+    expect(() => validatePermissionInterval("2026-07-20", "09:00", "17:00", overlapping)).toThrow("PERMISSION_EXCEEDS_DAILY_MAX");
+    expect(validatePermissionInterval("2026-07-20", "09:00", "16:30", overlapping)).toBe(450);
   });
 
   it("deducts only scheduled minutes when a permission crosses an unpaid break", () => {
@@ -41,6 +67,7 @@ describe("absence calculations", () => {
       { weekday: 1, start: "13:30", end: "17:00" },
     ];
     expect(validatePermissionInterval("2026-07-20", "12:00", "14:00", splitSchedule)).toBe(90);
-    expect(() => validatePermissionInterval("2026-07-20", "13:10", "14:00", splitSchedule)).toThrow("OUTSIDE_WORK_SCHEDULE");
+    expect(() => validatePermissionInterval("2026-07-20", "13:10", "14:00", splitSchedule)).toThrow("INVALID_PERMISSION_STEP");
+    expect(() => validatePermissionInterval("2026-07-20", "13:00", "14:00", splitSchedule)).toThrow("OUTSIDE_WORK_SCHEDULE");
   });
 });
