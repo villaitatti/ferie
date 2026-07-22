@@ -1,0 +1,82 @@
+openapi: 3.1.0
+info:
+  title: Employee Directory Time-Off Contract
+  version: 1.0.0
+paths:
+  /api/v1/time-off-directory/employees:
+    get:
+      summary: Return the minimal employee projection required by the Ferie portal
+      security:
+        - oauth2: [read:time-off-directory]
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
+      responses:
+        "200":
+          description: Paginated employee projection
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  nextCursor: { type: [string, "null"] }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TimeOffEmployee" }
+  /api/v1/time-off-directory/roles:
+    get:
+      summary: Return application-role definitions and current Auth0 synchronization state
+      security:
+        - oauth2: [read:time-off-directory]
+      responses:
+        "200": { description: Application roles and synchronization state }
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://AUTH0_DOMAIN/oauth/token
+          scopes:
+            read:time-off-directory: Read the minimal time-off directory projection
+  schemas:
+    WorkInterval:
+      type: object
+      additionalProperties: false
+      required: [weekday, start, end]
+      properties:
+        weekday: { type: integer, minimum: 1, maximum: 7 }
+        start: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+        end: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+    TimeOffEmployee:
+      type: object
+      additionalProperties: false
+      required: [id, employeeNumber, auth0Subject, workEmail, displayName, department, status, fte, schedule, roles, approvers, updatedAt]
+      properties:
+        id: { type: string }
+        employeeNumber: { type: string }
+        auth0Subject: { type: string }
+        workEmail: { type: string, format: email }
+        displayName: { type: string }
+        title: { type: [string, "null"] }
+        department:
+          type: object
+          required: [id, name, updatedAt]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            updatedAt: { type: string, format: date-time }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        fte: { type: number, exclusiveMinimum: 0 }
+        schedule: { type: array, items: { $ref: "#/components/schemas/WorkInterval" } }
+        roles: { type: array, items: { type: string, enum: [FERIE_FINAL_APPROVER, FERIE_PORTAL_ADMIN, STAFF_IT] } }
+        approvers:
+          type: array
+          items:
+            type: object
+            required: [employeeSourceId, role]
+            properties:
+              employeeSourceId: { type: string }
+              role: { type: string, enum: [PRE_APPROVER, RESPONSABILE, SUBSTITUTE_RESPONSABILE] }
+        updatedAt: { type: string, format: date-time }

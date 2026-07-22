@@ -1,0 +1,393 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AppRole {
+  FERIE_FINAL_APPROVER
+  FERIE_PORTAL_ADMIN
+  STAFF_IT
+}
+
+enum ApprovalRole {
+  PRE_APPROVER
+  RESPONSABILE
+  SUBSTITUTE_RESPONSABILE
+}
+
+enum DurationMode {
+  FULL_DAY_RANGE
+  MINUTES_SINGLE_DAY
+}
+
+enum EntryMode {
+  SELF_SERVICE
+  ADMIN_ONLY
+}
+
+enum Sensitivity {
+  STANDARD
+  SENSITIVE
+}
+
+enum CalendarVisibility {
+  EXACT
+  GENERIC
+  HIDDEN
+}
+
+enum BalanceUnit {
+  DAYS
+  MINUTES
+}
+
+enum WorkflowStatus {
+  DRAFT
+  PENDING_APPROVAL
+  PENDING_FINAL_APPROVAL
+  APPROVED
+  DECLINED
+  WITHDRAWN
+  CHANGE_REQUESTED
+  CANCELLATION_REQUESTED
+  CANCELLED
+}
+
+enum RequestProvenance {
+  SELF_SERVICE
+  ADMIN_MANUAL
+  EXTERNAL_IMPORT
+}
+
+enum ReconciliationStatus {
+  UNRECONCILED
+  MATCHED
+  DISCREPANCY
+  RESOLVED
+}
+
+enum HolidayKind {
+  NATIONAL
+  LOCAL
+  CENTRE
+  CUSTOM
+}
+
+enum HolidayRecurrence {
+  FIXED_ANNUAL
+  EASTER_OFFSET
+  ONE_OFF
+}
+
+enum DecisionAction {
+  SUBMIT
+  APPROVE
+  DECLINE
+  ESCALATE
+  WITHDRAW
+  REQUEST_CHANGE
+  REQUEST_CANCELLATION
+  CANCEL
+}
+
+enum ImportStatus {
+  PREVIEW
+  COMMITTED
+  REJECTED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model DepartmentMirror {
+  id              String           @id @default(cuid())
+  sourceId        String           @unique
+  name            String
+  sourceUpdatedAt DateTime
+  syncedAt        DateTime         @default(now())
+  employees       EmployeeMirror[]
+}
+
+model EmployeeMirror {
+  id              String                    @id @default(cuid())
+  sourceId        String                    @unique
+  employeeNumber  String                    @unique
+  auth0Subject    String                    @unique
+  email           String
+  displayName     String
+  title           String?
+  departmentId    String
+  department      DepartmentMirror          @relation(fields: [departmentId], references: [id])
+  status          EmployeeStatus            @default(ACTIVE)
+  fte             Decimal                   @db.Decimal(5, 4)
+  schedule        Json
+  roles           AppRole[]
+  sourceUpdatedAt DateTime
+  syncedAt        DateTime                  @default(now())
+  requests        AbsenceRequest[]
+  balances        BalanceSnapshot[]
+  adjustments     ManualBalanceAdjustment[]
+  subjects        ApproverAssignment[]      @relation("ApprovalSubject")
+  approvals       ApproverAssignment[]      @relation("ApprovalActor")
+  importLines     ImportLine[]
+}
+
+model ApproverAssignment {
+  id         String         @id @default(cuid())
+  employeeId String
+  approverId String
+  role       ApprovalRole
+  employee   EmployeeMirror @relation("ApprovalSubject", fields: [employeeId], references: [id], onDelete: Cascade)
+  approver   EmployeeMirror @relation("ApprovalActor", fields: [approverId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, approverId, role])
+}
+
+model DirectorySyncRun {
+  id            String     @id @default(cuid())
+  status        SyncStatus
+  startedAt     DateTime   @default(now())
+  finishedAt    DateTime?
+  employeeCount Int        @default(0)
+  errorCode     String?
+  errorMessage  String?
+}
+
+model BalanceAccount {
+  id           String                     @id @default(cuid())
+  code         String                     @unique
+  labelIt      String
+  labelEn      String
+  unit         BalanceUnit
+  active       Boolean                    @default(true)
+  absenceTypes AbsenceType[]
+  snapshots    BalanceSnapshot[]
+  adjustments  ManualBalanceAdjustment[]
+  allocations  RequestBalanceAllocation[]
+  importLines  ImportLine[]
+}
+
+model AbsenceType {
+  id                   String             @id @default(cuid())
+  code                 String             @unique
+  labelIt              String
+  labelEn              String
+  durationMode         DurationMode
+  entryMode            EntryMode
+  sensitivity          Sensitivity        @default(STANDARD)
+  balanceAccountId     String?
+  balanceAccount       BalanceAccount?    @relation(fields: [balanceAccountId], references: [id])
+  requiresApproval     Boolean            @default(true)
+  requiresEvidence     Boolean            @default(false)
+  employeeVisibility   CalendarVisibility @default(EXACT)
+  departmentVisibility CalendarVisibility @default(EXACT)
+  active               Boolean            @default(true)
+  requests             AbsenceRequest[]
+}
+
+model AbsenceRequest {
+  id                   String                     @id @default(cuid())
+  employeeId           String
+  employee             EmployeeMirror             @relation(fields: [employeeId], references: [id])
+  absenceTypeId        String
+  absenceType          AbsenceType                @relation(fields: [absenceTypeId], references: [id])
+  startDate            DateTime                   @db.Date
+  endDate              DateTime                   @db.Date
+  startTime            String?
+  endTime              String?
+  quantity             Decimal                    @db.Decimal(10, 2)
+  unit                 BalanceUnit
+  status               WorkflowStatus
+  provenance           RequestProvenance
+  reconciliationStatus ReconciliationStatus       @default(UNRECONCILED)
+  overBalance          Boolean                    @default(false)
+  employeeSnapshot     Json
+  calculationSnapshot  Json
+  parentRequestId      String?
+  parentRequest        AbsenceRequest?            @relation("RequestRevision", fields: [parentRequestId], references: [id])
+  revisions            AbsenceRequest[]           @relation("RequestRevision")
+  submittedAt          DateTime?
+  resolvedAt           DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  segments             RequestSegment[]
+  allocations          RequestBalanceAllocation[]
+  decisions            ApprovalAction[]
+  reconciliationCases  ReconciliationCase[]
+
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+}
+
+model RequestSegment {
+  id              String         @id @default(cuid())
+  requestId       String
+  request         AbsenceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  date            DateTime       @db.Date
+  startTime       String?
+  endTime         String?
+  quantity        Decimal        @db.Decimal(10, 2)
+  unit            BalanceUnit
+  exclusionReason String?
+
+  @@index([requestId, date])
+}
+
+model RequestBalanceAllocation {
+  id         String         @id @default(cuid())
+  requestId  String
+  request    AbsenceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  accountId  String
+  account    BalanceAccount @relation(fields: [accountId], references: [id])
+  amount     Decimal        @db.Decimal(10, 2)
+  reversedAt DateTime?
+}
+
+model ApprovalAction {
+  id           String          @id @default(cuid())
+  requestId    String
+  request      AbsenceRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorSubject String
+  actorName    String
+  action       DecisionAction
+  fromStatus   WorkflowStatus?
+  toStatus     WorkflowStatus
+  comment      String?
+  createdAt    DateTime        @default(now())
+}
+
+model HolidayRule {
+  id            String            @id @default(cuid())
+  code          String            @unique
+  labelIt       String
+  labelEn       String
+  kind          HolidayKind
+  recurrence    HolidayRecurrence
+  month         Int?
+  day           Int?
+  easterOffset  Int?
+  oneOffDate    DateTime?         @db.Date
+  effectiveFrom DateTime?         @db.Date
+  effectiveTo   DateTime?         @db.Date
+  deductsLeave  Boolean           @default(false)
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model ImportBatch {
+  id          String            @id @default(cuid())
+  sourceName  String
+  checksum    String            @unique
+  cutoffDate  DateTime          @db.Date
+  status      ImportStatus
+  rowCount    Int
+  validCount  Int
+  errorCount  Int
+  errors      Json
+  createdBy   String
+  createdAt   DateTime          @default(now())
+  committedAt DateTime?
+  lines       ImportLine[]
+  snapshots   BalanceSnapshot[]
+}
+
+model ImportLine {
+  id             String          @id @default(cuid())
+  batchId        String
+  batch          ImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber      Int
+  employeeNumber String
+  employeeId     String?
+  employee       EmployeeMirror? @relation(fields: [employeeId], references: [id])
+  accountCode    String
+  accountId      String?
+  account        BalanceAccount? @relation(fields: [accountId], references: [id])
+  amount         Decimal?        @db.Decimal(10, 2)
+  asOf           DateTime?       @db.Date
+  errorCode      String?
+}
+
+model BalanceSnapshot {
+  id            String         @id @default(cuid())
+  employeeId    String
+  employee      EmployeeMirror @relation(fields: [employeeId], references: [id])
+  accountId     String
+  account       BalanceAccount @relation(fields: [accountId], references: [id])
+  amount        Decimal        @db.Decimal(10, 2)
+  asOf          DateTime       @db.Date
+  cutoffDate    DateTime       @db.Date
+  importBatchId String?
+  importBatch   ImportBatch?   @relation(fields: [importBatchId], references: [id])
+  createdAt     DateTime       @default(now())
+
+  @@index([employeeId, accountId, asOf])
+}
+
+model ManualBalanceAdjustment {
+  id            String         @id @default(cuid())
+  employeeId    String
+  employee      EmployeeMirror @relation(fields: [employeeId], references: [id])
+  accountId     String
+  account       BalanceAccount @relation(fields: [accountId], references: [id])
+  amount        Decimal        @db.Decimal(10, 2)
+  effectiveDate DateTime       @db.Date
+  reason        String
+  createdBy     String
+  createdAt     DateTime       @default(now())
+
+  @@index([employeeId, accountId, effectiveDate])
+}
+
+model ReconciliationCase {
+  id                String               @id @default(cuid())
+  requestId         String?
+  request           AbsenceRequest?      @relation(fields: [requestId], references: [id])
+  status            ReconciliationStatus
+  externalReference String?
+  expectedAmount    Decimal?             @db.Decimal(10, 2)
+  actualAmount      Decimal?             @db.Decimal(10, 2)
+  resolution        String?
+  createdAt         DateTime             @default(now())
+  resolvedAt        DateTime?
+}
+
+model NotificationOutbox {
+  id        String    @id @default(cuid())
+  dedupeKey String    @unique
+  template  String
+  recipient String
+  payload   Json
+  attempts  Int       @default(0)
+  sentAt    DateTime?
+  lastError String?
+  createdAt DateTime  @default(now())
+}
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  actorSubject String
+  actorRole    String?
+  action       String
+  entityType   String
+  entityId     String
+  metadata     Json
+  requestId    String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
