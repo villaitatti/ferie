@@ -43,18 +43,30 @@ export async function enqueueNotification(requestId: string, recipient: string, 
   }
 }
 
+/**
+ * When a redirect mailbox is configured every message goes there and nowhere else, with the
+ * intended recipient moved into the subject. The outbox row keeps the real recipient so the
+ * notification audit trail stays truthful.
+ */
+export function mailDelivery(recipient: string, subject: string, redirectTo: string): { to: string; subject: string } {
+  if (!redirectTo) return { to: recipient, subject };
+  return { to: redirectTo, subject: `[dev → ${recipient}] ${subject}` };
+}
+
 async function deliver(outboxId: string) {
   const outbox = await prisma.notificationOutbox.findUnique({ where: { id: outboxId } });
   if (!outbox || outbox.sentAt) return;
   const link = `${config.APP_BASE_URL}/requests/${String((outbox.payload as { requestId?: string }).requestId ?? "")}`;
   const subject = outbox.template.includes("REQUIRED") ? "Azione richiesta nel portale assenze" : "Aggiornamento richiesta di assenza";
   const body = `È disponibile un aggiornamento nel portale assenze. Accedi in modo sicuro: ${link}\n\nAn update is available in the absence portal. Sign in securely: ${link}`;
+  const delivery = mailDelivery(outbox.recipient, subject, config.MAIL_REDIRECT_TO);
   try {
     if (config.SES_FROM_EMAIL) {
+      if (delivery.to !== outbox.recipient) logger.info({ intended: outbox.recipient, to: delivery.to, template: outbox.template }, "Notification redirected to the development mailbox");
       await new SESClient({ region: config.AWS_REGION }).send(new SendEmailCommand({
         Source: config.SES_FROM_EMAIL,
-        Destination: { ToAddresses: [outbox.recipient] },
-        Message: { Subject: { Data: subject, Charset: "UTF-8" }, Body: { Text: { Data: body, Charset: "UTF-8" } } },
+        Destination: { ToAddresses: [delivery.to] },
+        Message: { Subject: { Data: delivery.subject, Charset: "UTF-8" }, Body: { Text: { Data: body, Charset: "UTF-8" } } },
       }));
     } else logger.info({ recipient: outbox.recipient, template: outbox.template }, "SES disabled; recording demo notification");
     await prisma.notificationOutbox.update({ where: { id: outbox.id }, data: { sentAt: new Date(), attempts: { increment: 1 }, lastError: null } });

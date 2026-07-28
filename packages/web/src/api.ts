@@ -1,4 +1,4 @@
-import type { BalanceSummary, RequestListItem } from "@ferie/shared";
+import type { BalanceSummary, Language, RequestListItem } from "@ferie/shared";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "/api";
 let tokenProvider: (() => Promise<string>) | null = null;
@@ -25,10 +25,19 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export interface DevIdentity {
+  auth0Subject: string;
+  employeeNumber: string;
+  displayName: string;
+  email: string;
+  departmentName: string;
+  roles: string[];
+}
+
 export interface MeResponse {
-  employee: { id: string; displayName: string; email: string; title: string | null; departmentName: string; fte: number; roles: string[]; schedule: Array<{ weekday: number; start: string; end: string }> };
+  employee: { id: string; displayName: string; email: string; title: string | null; departmentName: string; fte: number; roles: string[]; preferredLanguage: Language; schedule: Array<{ weekday: number; start: string; end: string }> };
   balances: BalanceSummary[];
-  capabilities: { canApprove: boolean; canFinalApprove: boolean; canAdminister: boolean; canInspectIntegrations: boolean };
+  capabilities: { canApprove: boolean; canFinalApprove: boolean; canAdminister: boolean; canInspectIntegrations: boolean; canChangePreferredLanguage: boolean };
   pendingApprovals: number;
 }
 
@@ -58,4 +67,4 @@ export interface PreviewResponse {
   overBalance: boolean;
 }
 
-export type { BalanceSummary, RequestListItem };
+export type { BalanceSummary, Language, RequestListItem };

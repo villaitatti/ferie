@@ -1,3 +1,4 @@
+import { type AppRole, type Language, LANGUAGES } from "@ferie/shared";
 import { z } from "zod";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
@@ -16,6 +17,7 @@ const employeeSchema = z.object({
   fte: z.number().positive(),
   schedule: z.array(z.object({ weekday: z.number().int().min(1).max(7), start: z.string(), end: z.string() })),
   roles: z.array(z.enum(["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN", "STAFF_IT"])),
+  preferredLanguage: z.enum(LANGUAGES),
   approvers: z.array(z.object({ employeeSourceId: z.string(), role: z.enum(["PRE_APPROVER", "RESPONSABILE", "SUBSTITUTE_RESPONSABILE"]) })),
   updatedAt: z.string().datetime(),
 });
@@ -59,6 +61,41 @@ async function pendingRecipientSets(): Promise<Map<string, PendingRecipientSet>>
   return result;
 }
 
+export function directoryConfigured(): boolean {
+  return Boolean(config.ED_BASE_URL);
+}
+
+export function superuserEmails(value: string): string[] {
+  return value.split(",").map((entry) => entry.trim().toLowerCase()).filter(Boolean);
+}
+
+/**
+ * A real Employee Directory carries no Ferie application roles yet, and a sync deactivates every
+ * mirror row it does not return. Without a local grant the first successful sync would leave nobody
+ * holding STAFF_IT or FERIE_PORTAL_ADMIN, locking administration out until the database is reseeded.
+ */
+export function grantedRoles(email: string, roles: AppRole[], granted: string[]): AppRole[] {
+  if (!granted.includes(email.trim().toLowerCase())) return roles;
+  return [...new Set<AppRole>([...roles, "STAFF_IT", "FERIE_PORTAL_ADMIN", "FERIE_FINAL_APPROVER"])];
+}
+
+/**
+ * A sync fetches every page before opening its transaction, so a preferred-language change made in
+ * that window would otherwise be overwritten with the value the directory held at fetch time. The
+ * directory has already accepted the newer value, so the local column is the fresher of the two.
+ *
+ * Expressed as a filter rather than a read-then-decide, so the database evaluates it while holding
+ * the row lock: a write that commits first is seen and skipped, and one that commits later waits and
+ * then lands on top. Either ordering keeps the newest value. The following run starts after the write
+ * and mirrors the directory again, so the exception clears itself.
+ */
+export function languageNotWrittenSince(sourceId: string, syncStartedAt: Date) {
+  return {
+    sourceId,
+    OR: [{ preferredLanguageUpdatedAt: null }, { preferredLanguageUpdatedAt: { lt: syncStartedAt } }],
+  };
+}
+
 async function token(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
   const response = await fetch(`https://${config.AUTH0_DOMAIN}/oauth/token`, {
@@ -72,6 +109,17 @@ async function token(): Promise<string> {
   return cachedToken.value;
 }
 
+/**
+ * Local Employee Directory instances run with their own development escape hatch, so no Auth0 tenant
+ * is needed to exercise the integration end to end. This covers every directory call, the
+ * preferred-language write included, so a local directory has to accept unauthenticated writes too.
+ * `parseConfig` refuses to start with this enabled in production.
+ */
+async function directoryHeaders(): Promise<Record<string, string>> {
+  if (config.ED_DEV_UNAUTHENTICATED) return {};
+  return { authorization: `Bearer ${await token()}` };
+}
+
 export async function syncDirectory() {
   const run = await prisma.directorySyncRun.create({ data: { status: "RUNNING" } });
   try {
@@ -82,7 +130,7 @@ export async function syncDirectory() {
       const url = new URL("/api/v1/time-off-directory/employees", config.ED_BASE_URL);
       if (cursor) url.searchParams.set("cursor", cursor);
       url.searchParams.set("limit", "100");
-      const response = await fetch(url, { headers: { authorization: `Bearer ${await token()}` } });
+      const response = await fetch(url, { headers: await directoryHeaders() });
       if (!response.ok) throw new Error(`ED_FETCH_${response.status}`);
       const page = pageSchema.parse(await response.json());
       items.push(...page.items);
@@ -90,8 +138,10 @@ export async function syncDirectory() {
     } while (cursor);
 
     const recipientsBefore = await pendingRecipientSets();
+    const granted = superuserEmails(config.DEV_SUPERUSER_EMAILS);
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
+        const roles = grantedRoles(item.workEmail, item.roles, granted);
         const department = await tx.departmentMirror.upsert({
           where: { sourceId: item.department.id },
           create: { sourceId: item.department.id, name: item.department.name, sourceUpdatedAt: new Date(item.department.updatedAt) },
@@ -99,8 +149,13 @@ export async function syncDirectory() {
         });
         await tx.employeeMirror.upsert({
           where: { sourceId: item.id },
-          create: { sourceId: item.id, employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles: item.roles, sourceUpdatedAt: new Date(item.updatedAt) },
-          update: { employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles: item.roles, sourceUpdatedAt: new Date(item.updatedAt), syncedAt: new Date() },
+          create: { sourceId: item.id, employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, preferredLanguage: item.preferredLanguage, sourceUpdatedAt: new Date(item.updatedAt) },
+          update: { employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, sourceUpdatedAt: new Date(item.updatedAt), syncedAt: new Date() },
+        });
+        // Separate conditional write, so a language change made while this sync was fetching survives.
+        await tx.employeeMirror.updateMany({
+          where: languageNotWrittenSince(item.id, run.startedAt),
+          data: { preferredLanguage: item.preferredLanguage },
         });
       }
       const returnedIds = items.map((item) => item.id);
@@ -133,6 +188,21 @@ export async function syncDirectory() {
     logger.error({ err: error, runId: run.id }, "Employee Directory sync failed");
     throw error;
   }
+}
+
+/**
+ * Employee Directory owns the preferred language, so a portal change is written there first and
+ * mirrored only when the directory accepts it. The next sync then reports the same value back.
+ */
+export async function updateDirectoryPreferredLanguage(employeeSourceId: string, language: Language): Promise<void> {
+  if (!config.ED_BASE_URL) throw new Error("ED_NOT_CONFIGURED");
+  const url = new URL(`/api/v1/time-off-directory/employees/${encodeURIComponent(employeeSourceId)}/preferred-language`, config.ED_BASE_URL);
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: { ...await directoryHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ preferredLanguage: language }),
+  });
+  if (!response.ok) throw new Error(`ED_LANGUAGE_UPDATE_${response.status}`);
 }
 
 export async function integrationHealth() {

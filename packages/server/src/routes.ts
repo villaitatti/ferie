@@ -20,6 +20,7 @@ import {
   previewBalanceImport,
   previewRequest,
   resolveReconciliation,
+  setPreferredLanguage,
   submitRequest,
   upsertHolidayRule,
   updateAbsenceTypeVisibility,
@@ -27,6 +28,7 @@ import {
   assertCurrentRole,
 } from "./services/portal.js";
 import { integrationHealth, syncDirectory } from "./services/directory.js";
+import { listDevIdentities } from "./services/dev-identities.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 export const api = Router();
@@ -41,7 +43,9 @@ async function tabularRows(file: Express.Multer.File): Promise<Array<Record<stri
 }
 
 api.get("/health", (_request, response) => response.json({ status: "ok", service: "ferie-portal" }));
+api.get("/demo-identities", asyncHandler(async (_request, response) => response.json(await listDevIdentities())));
 api.get("/me", asyncHandler(async (request, response) => response.json(await getMe(request))));
+api.patch("/me/preferred-language", asyncHandler(async (request, response) => response.json(await setPreferredLanguage(request, request.body))));
 api.get("/requests", asyncHandler(async (request, response) => response.json(await listMyRequests(request))));
 api.get("/requests/:id", asyncHandler(async (request, response) => response.json(await getRequestDetail(request, String(request.params.id)))));
 api.get("/request-calendar", asyncHandler(async (request, response) => response.json(await listRequestCalendar(request, request.query))));

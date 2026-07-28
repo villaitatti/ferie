@@ -24,6 +24,37 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/TimeOffEmployee" }
+  /api/v1/time-off-directory/employees/{id}/preferred-language:
+    patch:
+      summary: Record an employee's preferred interface language
+      description: >
+        The only field the Ferie portal writes back. Employee Directory remains authoritative: the
+        portal saves the change here first and mirrors it locally only once this call succeeds.
+      security:
+        - oauth2: [write:time-off-directory]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [preferredLanguage]
+              properties:
+                preferredLanguage: { $ref: "#/components/schemas/Language" }
+      responses:
+        "200":
+          description: The stored preference
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [preferredLanguage]
+                properties:
+                  preferredLanguage: { $ref: "#/components/schemas/Language" }
+        "404": { description: No such employee }
   /api/v1/time-off-directory/roles:
     get:
       summary: Return application-role definitions and current Auth0 synchronization state
@@ -40,7 +71,11 @@ components:
           tokenUrl: https://AUTH0_DOMAIN/oauth/token
           scopes:
             read:time-off-directory: Read the minimal time-off directory projection
+            write:time-off-directory: Record an employee's preferred interface language
   schemas:
+    Language:
+      type: string
+      enum: [IT, EN]
     WorkInterval:
       type: object
       additionalProperties: false
@@ -52,7 +87,7 @@ components:
     TimeOffEmployee:
       type: object
       additionalProperties: false
-      required: [id, employeeNumber, auth0Subject, workEmail, displayName, department, status, fte, schedule, roles, approvers, updatedAt]
+      required: [id, employeeNumber, auth0Subject, workEmail, displayName, department, status, fte, schedule, roles, preferredLanguage, approvers, updatedAt]
       properties:
         id: { type: string }
         employeeNumber: { type: string }
@@ -71,6 +106,7 @@ components:
         fte: { type: number, exclusiveMinimum: 0 }
         schedule: { type: array, items: { $ref: "#/components/schemas/WorkInterval" } }
         roles: { type: array, items: { type: string, enum: [FERIE_FINAL_APPROVER, FERIE_PORTAL_ADMIN, STAFF_IT] } }
+        preferredLanguage: { $ref: "#/components/schemas/Language" }
         approvers:
           type: array
           items:

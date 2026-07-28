@@ -6,7 +6,8 @@ services:
       POSTGRES_USER: ferie
       POSTGRES_PASSWORD: ferie
     ports:
-      - "5433:5432"
+      # Overridable so parallel checkouts of this repository can each run their own dev database.
+      - "${DEV_DB_PORT:-5433}:5432"
     volumes:
       - ferie_dev_pgdata:/var/lib/postgresql/data
     healthcheck:

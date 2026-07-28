@@ -11,6 +11,7 @@ import {
   easterSunday,
   futureAbsenceImportSchema,
   holidayRuleUpsertSchema,
+  preferredLanguageSchema,
   requestPreviewSchema,
   requestCalendarRangeSchema,
   resolveDecisionTransition,
@@ -30,7 +31,9 @@ import {
 } from "@ferie/shared";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../lib/http.js";
+import { logger } from "../lib/logger.js";
 import { audit } from "./audit.js";
+import { directoryConfigured, updateDirectoryPreferredLanguage } from "./directory.js";
 import { enqueueNotification } from "./queue.js";
 
 const activeStatuses = ["PENDING_APPROVAL", "PENDING_FINAL_APPROVAL", "APPROVED", "CHANGE_REQUESTED", "CANCELLATION_REQUESTED"] as const;
@@ -84,6 +87,7 @@ export async function getMe(request: Request) {
       status: employee.status,
       schedule: employee.schedule,
       roles: employee.roles,
+      preferredLanguage: employee.preferredLanguage,
     },
     balances,
     capabilities: {
@@ -91,9 +95,31 @@ export async function getMe(request: Request) {
       canFinalApprove: employee.roles.includes("FERIE_FINAL_APPROVER"),
       canAdminister: employee.roles.includes("FERIE_PORTAL_ADMIN"),
       canInspectIntegrations: employee.roles.includes("STAFF_IT") || employee.roles.includes("FERIE_PORTAL_ADMIN"),
+      // Employee Directory owns the preferred language, so without one there is nothing to write to.
+      canChangePreferredLanguage: directoryConfigured(),
     },
     pendingApprovals,
   };
+}
+
+export async function setPreferredLanguage(request: Request, raw: unknown) {
+  const employee = await actorEmployee(request);
+  const input = preferredLanguageSchema.parse(raw);
+  // Without a directory there is no authoritative store to write to, so the preference cannot be
+  // changed at all. Saying so is honest; mirroring it locally would invent a second source of truth.
+  if (!directoryConfigured()) throw new HttpError(409, "DIRECTORY_NOT_CONFIGURED");
+  try {
+    await updateDirectoryPreferredLanguage(employee.sourceId, input.preferredLanguage);
+  } catch (error) {
+    logger.error({ err: error, employeeId: employee.id }, "Employee Directory rejected a preferred language change");
+    throw new HttpError(502, "DIRECTORY_UPDATE_FAILED");
+  }
+  const updated = await prisma.employeeMirror.update({
+    where: { id: employee.id },
+    data: { preferredLanguage: input.preferredLanguage, preferredLanguageUpdatedAt: new Date() },
+  });
+  await audit(request, "PREFERRED_LANGUAGE_UPDATED", "EmployeeMirror", employee.id, { preferredLanguage: updated.preferredLanguage });
+  return { preferredLanguage: updated.preferredLanguage };
 }
 
 async function countPendingApprovals(employeeId: string, roles: string[]): Promise<number> {

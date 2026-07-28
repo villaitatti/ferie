@@ -1,13 +1,16 @@
 import { ActionIcon, AppShell, Avatar, Burger, Group, Menu, NavLink, Select, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Network, Plus, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense } from "react";
-import { api, type MeResponse } from "./api";
+import { lazy, Suspense, useEffect } from "react";
+import type { Language } from "@ferie/shared";
+import { api, type DevIdentity, type MeResponse } from "./api";
 import { usePortalSession } from "./auth";
 import { PageLoader } from "./components";
+import { currentDemoSubject, DEMO_SUBJECT_KEY, demoIdentityOptions, isDemoMode } from "./demo-identity";
+import { LANGUAGE_CACHE_KEY, languageCode, languageFromCode, LANGUAGE_OPTIONS, readSessionOverride, resolveLanguage, SESSION_OVERRIDE_KEY } from "./language";
 import { splitMobileNavigation } from "./mobile-navigation";
 
 const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
@@ -19,24 +22,99 @@ const CalendarPage = lazy(() => import("./pages/CalendarPage").then((module) => 
 const Admin = lazy(() => import("./pages/Admin").then((module) => ({ default: module.Admin })));
 const Integrations = lazy(() => import("./pages/Integrations").then((module) => ({ default: module.Integrations })));
 
-const demoUsers = [
-  { value: "auth0|demo-employee", label: "Andrea · Staff" },
-  { value: "auth0|demo-approver", label: "Elena · Pre-approver" },
-  { value: "auth0|demo-responsible", label: "Marco · HOD" },
-  { value: "auth0|demo-final", label: "Giulia · HR / Final" },
-  { value: "auth0|demo-it", label: "Luca · IT" },
-];
+/**
+ * Applies the Employee Directory preference on every load, unless this tab has switched language for
+ * the same employee with the header control.
+ */
+function useInterfaceLanguage(employee: MeResponse["employee"] | undefined) {
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    if (!employee) return;
+    const target = languageCode(resolveLanguage(employee.id, employee.preferredLanguage, readSessionOverride()));
+    if (i18n.language === target) return;
+    localStorage.setItem(LANGUAGE_CACHE_KEY, target);
+    void i18n.changeLanguage(target);
+  }, [employee, i18n]);
+}
+
+function PreferredLanguageSetting({ employee, available }: { employee: MeResponse["employee"]; available: boolean }) {
+  const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
+  const update = useMutation({
+    mutationFn: (language: Language) => api<{ preferredLanguage: Language }>("/me/preferred-language", { method: "PATCH", body: JSON.stringify({ preferredLanguage: language }) }),
+    onSuccess: async (result) => {
+      // The durable choice supersedes any temporary switch made in this tab.
+      sessionStorage.removeItem(SESSION_OVERRIDE_KEY);
+      const code = languageCode(result.preferredLanguage);
+      localStorage.setItem(LANGUAGE_CACHE_KEY, code);
+      await i18n.changeLanguage(code);
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+  return (
+    <Select
+      label={t("preferredLanguage")}
+      description={!available ? t("preferredLanguageUnavailable") : update.isError ? t("preferredLanguageFailed") : t("preferredLanguageHint")}
+      error={update.isError}
+      data={LANGUAGE_OPTIONS}
+      value={employee.preferredLanguage}
+      onChange={(value) => { if (value) update.mutate(value as Language); }}
+      disabled={!available || update.isPending}
+      allowDeselect={false}
+      size="xs"
+    />
+  );
+}
+
+function DemoIdentitySwitcher() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const identities = useQuery({
+    queryKey: ["demo-identities"],
+    queryFn: () => api<{ identities: DevIdentity[] }>("/demo-identities"),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const subject = currentDemoSubject();
+  const changeIdentity = (next: string | null) => {
+    if (!next) return;
+    localStorage.setItem(DEMO_SUBJECT_KEY, next);
+    void queryClient.invalidateQueries();
+    navigate("/");
+  };
+  return (
+    <Select
+      label={t("rolePreview")}
+      data={demoIdentityOptions(identities.data?.identities, subject)}
+      value={subject}
+      onChange={changeIdentity}
+      searchable
+      limit={50}
+      nothingFoundMessage={t("noIdentityMatches")}
+      size="xs"
+    />
+  );
+}
 
 export function App() {
   const [opened, { toggle, close }] = useDisclosure();
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { signOut } = usePortalSession();
   const me = useQuery({ queryKey: ["me"], queryFn: () => api<MeResponse>("/me") });
+  useInterfaceLanguage(me.data?.employee);
   if (me.isLoading) return <main className="boot-loader"><PageLoader /></main>;
-  if (me.isError || !me.data) return <main className="boot-error"><Text fw={700}>{i18n.language === "en" ? "Access unavailable" : "Accesso non disponibile"}</Text><Text c="dimmed">{me.error instanceof Error ? me.error.message : i18n.language === "en" ? "Your Employee Directory identity could not be loaded." : "Impossibile caricare l'identità da Employee Directory."}</Text></main>;
+  if (me.isError || !me.data) {
+    return (
+      <main className="boot-error">
+        <Text fw={700}>{i18n.language === "en" ? "Access unavailable" : "Accesso non disponibile"}</Text>
+        <Text c="dimmed">{me.error instanceof Error ? me.error.message : i18n.language === "en" ? "Your Employee Directory identity could not be loaded." : "Impossibile caricare l'identità da Employee Directory."}</Text>
+        {isDemoMode() && <div className="boot-error-identity"><DemoIdentitySwitcher /></div>}
+      </main>
+    );
+  }
 
   const navigation = [
     { path: "/", label: t("home"), icon: Gauge, show: true },
@@ -48,12 +126,12 @@ export function App() {
     { path: "/integrations", label: t("integrations"), icon: Network, show: me.data.capabilities.canInspectIntegrations },
   ].filter((entry) => entry.show);
 
-  const selectLanguage = async (language: string) => { localStorage.setItem("ferie-language", language); await i18n.changeLanguage(language); };
-  const changeDemo = (subject: string | null) => {
-    if (!subject) return;
-    localStorage.setItem("ferie-demo-subject", subject);
-    void queryClient.invalidateQueries();
-    navigate("/");
+  // Temporary, this tab only. The durable preference lives in Employee Directory and is changed from
+  // the profile menu.
+  const selectLanguage = async (language: string) => {
+    sessionStorage.setItem(SESSION_OVERRIDE_KEY, JSON.stringify({ employeeId: me.data.employee.id, language: languageFromCode(language) }));
+    localStorage.setItem(LANGUAGE_CACHE_KEY, language);
+    await i18n.changeLanguage(language);
   };
 
   const pathIsActive = (path: string) => location.pathname === path || (path === "/requests" && location.pathname.startsWith("/requests/"));
@@ -75,7 +153,8 @@ export function App() {
               <Menu.Target><button className="profile-button"><Avatar size={34} color="forest">{me.data.employee.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</Avatar><span className="profile-copy"><strong>{me.data.employee.displayName}</strong><small>{me.data.employee.departmentName}</small></span></button></Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>{me.data.employee.email}</Menu.Label>
-                {import.meta.env.VITE_AUTH_DISABLED !== "false" && <Menu.Item closeMenuOnClick={false}><Select label={t("rolePreview")} data={demoUsers} value={localStorage.getItem("ferie-demo-subject") ?? "auth0|demo-employee"} onChange={changeDemo} size="xs" /></Menu.Item>}
+                <Menu.Item closeMenuOnClick={false}><PreferredLanguageSetting employee={me.data.employee} available={me.data.capabilities.canChangePreferredLanguage} /></Menu.Item>
+                {isDemoMode() && <Menu.Item closeMenuOnClick={false}><DemoIdentitySwitcher /></Menu.Item>}
                 <Menu.Divider />
                 <Menu.Item leftSection={<LogOut size={16} />} onClick={signOut}>{t("signOut")}</Menu.Item>
               </Menu.Dropdown>

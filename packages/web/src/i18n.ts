@@ -1,5 +1,6 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { LANGUAGE_CACHE_KEY } from "./language";
 
 const resources = {
   it: { translation: {
@@ -68,6 +69,11 @@ const resources = {
     syncNow: "Sincronizza ED",
     language: "Lingua",
     rolePreview: "Identità demo",
+    noIdentityMatches: "Nessun dipendente corrisponde",
+    preferredLanguage: "Lingua preferita",
+    preferredLanguageHint: "Salvata in Employee Directory",
+    preferredLanguageFailed: "Employee Directory non ha accettato la modifica",
+    preferredLanguageUnavailable: "Employee Directory non è configurato",
     signOut: "Esci",
     loading: "Caricamento…",
     requestCreated: "Richiesta inviata",
@@ -162,6 +168,11 @@ const resources = {
     syncNow: "Sync ED",
     language: "Language",
     rolePreview: "Demo identity",
+    noIdentityMatches: "No employee matches",
+    preferredLanguage: "Preferred language",
+    preferredLanguageHint: "Saved in Employee Directory",
+    preferredLanguageFailed: "Employee Directory rejected the change",
+    preferredLanguageUnavailable: "Employee Directory is not configured",
     signOut: "Sign out",
     loading: "Loading…",
     requestCreated: "Request submitted",
@@ -192,9 +203,11 @@ const resources = {
   } },
 };
 
+// Boots from the last applied language purely to avoid a flash; `/me` then applies the Employee
+// Directory preference, or this tab's override, as the authoritative choice.
 void i18n.use(initReactI18next).init({
   resources,
-  lng: localStorage.getItem("ferie-language") ?? "it",
+  lng: localStorage.getItem(LANGUAGE_CACHE_KEY) ?? "it",
   fallbackLng: "it",
   interpolation: { escapeValue: false },
 });

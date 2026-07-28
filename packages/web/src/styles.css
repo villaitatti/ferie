@@ -77,6 +77,7 @@ button, input { letter-spacing: 0; }
 .integration-tile { min-height: 150px; }
 .mobile-nav { display: none; }
 .boot-loader, .boot-error { max-width: 700px; margin: 15vh auto; padding: 24px; }
+.boot-error-identity { max-width: 340px; margin-top: 20px; }
 .centered-loader { min-height: 100vh; display: grid; place-items: center; }
 @media (max-width: 47.99em) {
   .profile-copy { display: none; }

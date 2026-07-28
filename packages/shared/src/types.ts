@@ -16,6 +16,8 @@ export type ReconciliationStatus = "UNRECONCILED" | "MATCHED" | "DISCREPANCY" | 
 export type BalanceUnit = "DAYS" | "MINUTES";
 export type DurationMode = "FULL_DAY_RANGE" | "MINUTES_SINGLE_DAY";
 export type AppRole = "FERIE_FINAL_APPROVER" | "FERIE_PORTAL_ADMIN" | "STAFF_IT";
+export const LANGUAGES = ["IT", "EN"] as const;
+export type Language = (typeof LANGUAGES)[number];
 export type ApprovalRole = "PRE_APPROVER" | "RESPONSABILE" | "SUBSTITUTE_RESPONSABILE";
 
 export interface WorkInterval {
@@ -37,6 +39,7 @@ export interface EmployeeSummary {
   fte: number;
   schedule: WorkInterval[];
   roles: AppRole[];
+  preferredLanguage: Language;
 }
 
 export interface BalanceSummary {

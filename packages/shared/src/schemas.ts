@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Temporal } from "@js-temporal/polyfill";
-import { WORKFLOW_STATUSES } from "./types.js";
+import { LANGUAGES, WORKFLOW_STATUSES } from "./types.js";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 const timeOnly = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:mm");
@@ -124,6 +124,9 @@ export const futureAbsenceImportSchema = z.object({
   })).min(1),
 });
 
+export const preferredLanguageSchema = z.object({ preferredLanguage: z.enum(LANGUAGES) });
+
+export type PreferredLanguageInput = z.infer<typeof preferredLanguageSchema>;
 export type RequestPreviewInput = z.infer<typeof requestPreviewSchema>;
 export type SubmitRequestInput = z.infer<typeof submitRequestSchema>;
 export type DecisionInput = z.infer<typeof decisionSchema>;
