@@ -35,7 +35,9 @@ async function main() {
     await prisma.employeeMirror.upsert({
       where: { sourceId: employee.sourceId },
       create: { ...identity, roles: [...identity.roles], status: "ACTIVE", fte: 1, schedule, sourceUpdatedAt: new Date() },
-      update: { employeeNumber: identity.employeeNumber, auth0Subject: identity.auth0Subject, email: identity.email, displayName: identity.displayName, title: identity.title, departmentId: identity.departmentId, roles: [...identity.roles], preferredLanguage: identity.preferredLanguage, schedule, status: "ACTIVE", sourceUpdatedAt: new Date() },
+      // preferredLanguageUpdatedAt is cleared: the seeded state represents a value as mirrored from
+      // the directory, with no local write for a sync to preserve.
+      update: { employeeNumber: identity.employeeNumber, auth0Subject: identity.auth0Subject, email: identity.email, displayName: identity.displayName, title: identity.title, departmentId: identity.departmentId, roles: [...identity.roles], preferredLanguage: identity.preferredLanguage, preferredLanguageUpdatedAt: null, schedule, status: "ACTIVE", sourceUpdatedAt: new Date() },
     });
   }
 

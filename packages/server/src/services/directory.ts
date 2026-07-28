@@ -61,6 +61,10 @@ async function pendingRecipientSets(): Promise<Map<string, PendingRecipientSet>>
   return result;
 }
 
+export function directoryConfigured(): boolean {
+  return Boolean(config.ED_BASE_URL);
+}
+
 export function superuserEmails(value: string): string[] {
   return value.split(",").map((entry) => entry.trim().toLowerCase()).filter(Boolean);
 }
@@ -73,6 +77,23 @@ export function superuserEmails(value: string): string[] {
 export function grantedRoles(email: string, roles: AppRole[], granted: string[]): AppRole[] {
   if (!granted.includes(email.trim().toLowerCase())) return roles;
   return [...new Set<AppRole>([...roles, "STAFF_IT", "FERIE_PORTAL_ADMIN", "FERIE_FINAL_APPROVER"])];
+}
+
+/**
+ * A sync fetches every page before opening its transaction, so a preferred-language change made in
+ * that window would otherwise be overwritten with the value the directory held at fetch time. The
+ * directory has already accepted the newer value, so the local column is the fresher of the two.
+ *
+ * Expressed as a filter rather than a read-then-decide, so the database evaluates it while holding
+ * the row lock: a write that commits first is seen and skipped, and one that commits later waits and
+ * then lands on top. Either ordering keeps the newest value. The following run starts after the write
+ * and mirrors the directory again, so the exception clears itself.
+ */
+export function languageNotWrittenSince(sourceId: string, syncStartedAt: Date) {
+  return {
+    sourceId,
+    OR: [{ preferredLanguageUpdatedAt: null }, { preferredLanguageUpdatedAt: { lt: syncStartedAt } }],
+  };
 }
 
 async function token(): Promise<string> {
@@ -89,8 +110,9 @@ async function token(): Promise<string> {
 }
 
 /**
- * Local Employee Directory instances run with their own development escape hatch and accept
- * unauthenticated reads, so no Auth0 tenant is needed to exercise the sync end to end.
+ * Local Employee Directory instances run with their own development escape hatch, so no Auth0 tenant
+ * is needed to exercise the integration end to end. This covers every directory call, the
+ * preferred-language write included, so a local directory has to accept unauthenticated writes too.
  * `parseConfig` refuses to start with this enabled in production.
  */
 async function directoryHeaders(): Promise<Record<string, string>> {
@@ -128,7 +150,12 @@ export async function syncDirectory() {
         await tx.employeeMirror.upsert({
           where: { sourceId: item.id },
           create: { sourceId: item.id, employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, preferredLanguage: item.preferredLanguage, sourceUpdatedAt: new Date(item.updatedAt) },
-          update: { employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, preferredLanguage: item.preferredLanguage, sourceUpdatedAt: new Date(item.updatedAt), syncedAt: new Date() },
+          update: { employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, sourceUpdatedAt: new Date(item.updatedAt), syncedAt: new Date() },
+        });
+        // Separate conditional write, so a language change made while this sync was fetching survives.
+        await tx.employeeMirror.updateMany({
+          where: languageNotWrittenSince(item.id, run.startedAt),
+          data: { preferredLanguage: item.preferredLanguage },
         });
       }
       const returnedIds = items.map((item) => item.id);

@@ -37,7 +37,7 @@ function useInterfaceLanguage(employee: MeResponse["employee"] | undefined) {
   }, [employee, i18n]);
 }
 
-function PreferredLanguageSetting({ employee }: { employee: MeResponse["employee"] }) {
+function PreferredLanguageSetting({ employee, available }: { employee: MeResponse["employee"]; available: boolean }) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const update = useMutation({
@@ -54,12 +54,12 @@ function PreferredLanguageSetting({ employee }: { employee: MeResponse["employee
   return (
     <Select
       label={t("preferredLanguage")}
-      description={update.isError ? t("preferredLanguageFailed") : t("preferredLanguageHint")}
+      description={!available ? t("preferredLanguageUnavailable") : update.isError ? t("preferredLanguageFailed") : t("preferredLanguageHint")}
       error={update.isError}
       data={LANGUAGE_OPTIONS}
       value={employee.preferredLanguage}
       onChange={(value) => { if (value) update.mutate(value as Language); }}
-      disabled={update.isPending}
+      disabled={!available || update.isPending}
       allowDeselect={false}
       size="xs"
     />
@@ -153,7 +153,7 @@ export function App() {
               <Menu.Target><button className="profile-button"><Avatar size={34} color="forest">{me.data.employee.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</Avatar><span className="profile-copy"><strong>{me.data.employee.displayName}</strong><small>{me.data.employee.departmentName}</small></span></button></Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>{me.data.employee.email}</Menu.Label>
-                <Menu.Item closeMenuOnClick={false}><PreferredLanguageSetting employee={me.data.employee} /></Menu.Item>
+                <Menu.Item closeMenuOnClick={false}><PreferredLanguageSetting employee={me.data.employee} available={me.data.capabilities.canChangePreferredLanguage} /></Menu.Item>
                 {isDemoMode() && <Menu.Item closeMenuOnClick={false}><DemoIdentitySwitcher /></Menu.Item>}
                 <Menu.Divider />
                 <Menu.Item leftSection={<LogOut size={16} />} onClick={signOut}>{t("signOut")}</Menu.Item>

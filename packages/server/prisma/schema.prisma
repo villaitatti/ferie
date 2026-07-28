@@ -140,8 +140,10 @@ model EmployeeMirror {
   schedule        Json
   roles           AppRole[]
   // Mirrored from Employee Directory, which stays authoritative. The portal writes a change back to
-  // the directory first and only then updates this column.
+  // the directory first and only then updates this column. The timestamp records when the portal
+  // last did so, so a sync that fetched its pages before that write cannot mirror stale data back.
   preferredLanguage Language                @default(IT)
+  preferredLanguageUpdatedAt DateTime?
   sourceUpdatedAt DateTime
   syncedAt        DateTime                  @default(now())
   requests        AbsenceRequest[]

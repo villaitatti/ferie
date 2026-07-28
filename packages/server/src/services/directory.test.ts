@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { grantedRoles, newlyAssignedRecipients, superuserEmails } from "./directory.js";
+import { grantedRoles, languageNotWrittenSince, newlyAssignedRecipients, superuserEmails } from "./directory.js";
 
 describe("directory reassignment notifications", () => {
   it("returns only recipients newly introduced by a sync", () => {
     expect(newlyAssignedRecipients(["a@example.org", "b@example.org"], ["b@example.org", "c@example.org", "c@example.org"])).toEqual(["c@example.org"]);
     expect(newlyAssignedRecipients(["a@example.org"], ["a@example.org"])).toEqual([]);
+  });
+});
+
+describe("preferred language write guard", () => {
+  const syncStarted = new Date("2026-07-28T10:00:00.000Z");
+
+  it("targets the employee and only rows the portal has not written since the sync started", () => {
+    expect(languageNotWrittenSince("ed-1001", syncStarted)).toEqual({
+      sourceId: "ed-1001",
+      OR: [{ preferredLanguageUpdatedAt: null }, { preferredLanguageUpdatedAt: { lt: syncStarted } }],
+    });
+  });
+
+  it("uses a strict comparison, so a write in the sync's own start millisecond is preserved", () => {
+    const filter = languageNotWrittenSince("ed-1001", syncStarted);
+    expect(filter.OR[1]).toEqual({ preferredLanguageUpdatedAt: { lt: syncStarted } });
+    expect(filter.OR[1]).not.toEqual({ preferredLanguageUpdatedAt: { lte: syncStarted } });
   });
 });
 
