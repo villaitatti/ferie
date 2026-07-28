@@ -2,7 +2,7 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
-## [Unreleased]
+## [0.2.0] - 28 July 2026
 
 ### Added
 
