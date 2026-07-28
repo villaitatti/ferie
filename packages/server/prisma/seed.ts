@@ -1,4 +1,5 @@
-import { AppRole, PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { AppRole, Language, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const standardSchedule = [1, 2, 3, 4, 5].flatMap((weekday) => [
@@ -22,19 +23,19 @@ async function main() {
     update: { name: "Finance & HR" },
   });
 
-  const employees: Array<{ id: string; sourceId: string; employeeNumber: string; auth0Subject: string; email: string; displayName: string; title: string; departmentId: string; roles: AppRole[]; schedule: typeof standardSchedule }> = [
-    { id: "emp-andrea", sourceId: "ed-1001", employeeNumber: "1001", auth0Subject: "auth0|demo-employee", email: "andrea.caselli@example.org", displayName: "Andrea Caselli", title: "Digital Projects Manager", departmentId: research.id, roles: [], schedule: earlySchedule },
-    { id: "emp-pre", sourceId: "ed-2001", employeeNumber: "2001", auth0Subject: "auth0|demo-approver", email: "preapprover@example.org", displayName: "Elena Bianchi", title: "Program Manager", departmentId: research.id, roles: [], schedule: earlySchedule },
-    { id: "emp-resp", sourceId: "ed-2002", employeeNumber: "2002", auth0Subject: "auth0|demo-responsible", email: "responsabile@example.org", displayName: "Marco Rossi", title: "Head of Department", departmentId: research.id, roles: [], schedule: standardSchedule },
-    { id: "emp-final", sourceId: "ed-3001", employeeNumber: "3001", auth0Subject: "auth0|demo-final", email: "final.approver@example.org", displayName: "Giulia Conti", title: "Finance Director", departmentId: finance.id, roles: ["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN"], schedule: standardSchedule },
-    { id: "emp-it", sourceId: "ed-4001", employeeNumber: "4001", auth0Subject: "auth0|demo-it", email: "it@example.org", displayName: "Luca Romano", title: "Systems Administrator", departmentId: research.id, roles: ["STAFF_IT"], schedule: earlySchedule },
+  const employees: Array<{ id: string; sourceId: string; employeeNumber: string; auth0Subject: string; email: string; displayName: string; title: string; departmentId: string; roles: AppRole[]; preferredLanguage: Language; schedule: typeof standardSchedule }> = [
+    { id: "emp-andrea", sourceId: "ed-1001", employeeNumber: "1001", auth0Subject: "auth0|demo-employee", email: "andrea.caselli@example.org", displayName: "Andrea Caselli", title: "Digital Projects Manager", departmentId: research.id, roles: [], preferredLanguage: "IT", schedule: earlySchedule },
+    { id: "emp-pre", sourceId: "ed-2001", employeeNumber: "2001", auth0Subject: "auth0|demo-approver", email: "preapprover@example.org", displayName: "Elena Bianchi", title: "Program Manager", departmentId: research.id, roles: [], preferredLanguage: "IT", schedule: earlySchedule },
+    { id: "emp-resp", sourceId: "ed-2002", employeeNumber: "2002", auth0Subject: "auth0|demo-responsible", email: "responsabile@example.org", displayName: "Marco Rossi", title: "Head of Department", departmentId: research.id, roles: [], preferredLanguage: "IT", schedule: standardSchedule },
+    { id: "emp-final", sourceId: "ed-3001", employeeNumber: "3001", auth0Subject: "auth0|demo-final", email: "final.approver@example.org", displayName: "Giulia Conti", title: "Finance Director", departmentId: finance.id, roles: ["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN"], preferredLanguage: "EN", schedule: standardSchedule },
+    { id: "emp-it", sourceId: "ed-4001", employeeNumber: "4001", auth0Subject: "auth0|demo-it", email: "it@example.org", displayName: "Luca Romano", title: "Systems Administrator", departmentId: research.id, roles: ["STAFF_IT"], preferredLanguage: "EN", schedule: earlySchedule },
   ];
   for (const employee of employees) {
     const { schedule, ...identity } = employee;
     await prisma.employeeMirror.upsert({
       where: { sourceId: employee.sourceId },
       create: { ...identity, roles: [...identity.roles], status: "ACTIVE", fte: 1, schedule, sourceUpdatedAt: new Date() },
-      update: { employeeNumber: identity.employeeNumber, auth0Subject: identity.auth0Subject, email: identity.email, displayName: identity.displayName, title: identity.title, departmentId: identity.departmentId, roles: [...identity.roles], schedule, status: "ACTIVE", sourceUpdatedAt: new Date() },
+      update: { employeeNumber: identity.employeeNumber, auth0Subject: identity.auth0Subject, email: identity.email, displayName: identity.displayName, title: identity.title, departmentId: identity.departmentId, roles: [...identity.roles], preferredLanguage: identity.preferredLanguage, schedule, status: "ACTIVE", sourceUpdatedAt: new Date() },
     });
   }
 

@@ -2,6 +2,25 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Preferred interface language mirrored from Employee Directory: the portal opens in each employee's
+  own language, the header control switches language for the current tab only, and a profile setting
+  changes the durable preference. The directory stays authoritative — the change is written there
+  through `PATCH /api/v1/time-off-directory/employees/{id}/preferred-language` and mirrored locally
+  only once it is accepted, so a rejected write reports an error instead of silently reverting.
+
+- Development wiring for a local Employee Directory: `ED_DEV_UNAUTHENTICATED` reads a directory that runs with its own authentication escape hatch instead of requesting an Auth0 machine-to-machine token, and `DEV_SUPERUSER_EMAILS` grants administration roles on every sync so a directory without application roles cannot lock the portal out.
+- `MAIL_REDIRECT_TO` delivers every notification to one mailbox and to nobody else. It is mandatory outside production as soon as a SES sender is configured, and refused in production.
+- Demo identity switcher backed by `GET /api/demo-identities`, listing every synchronized employee instead of five hard-coded subjects. It also renders on the "identity not found" screen, so a stale stored subject can be changed after a sync.
+- `DEV_DB_PORT` publishes the development database on a configurable host port so parallel checkouts can each run their own.
+
+### Fixed
+
+- `pnpm db:seed` loads the environment file, so the documented setup sequence works without exporting `DATABASE_URL` by hand.
+
 ## [0.1.0] - 21 July 2026
 
 ### Added

@@ -29,6 +29,7 @@ const me: MeResponse = {
     email: "andrea@example.org",
     title: null,
     departmentName: "Research",
+    preferredLanguage: "IT",
     fte: 1,
     roles: [],
     schedule: [1, 2, 3, 4, 5].flatMap((weekday) => [
