@@ -46,6 +46,13 @@ function DateField({
   const generatedId = React.useId();
   const fieldId = id ?? generatedId;
 
+  // The year window exists only so the caption dropdown has a list to offer. It is generous by
+  // default and always stretched to cover the value and any explicit bounds, so no date the server
+  // accepts is unreachable — historical records go well past a handful of years back.
+  const currentYear = new Date().getFullYear();
+  const startYear = Math.min(currentYear - 20, ...[minDate, value].filter(Boolean).map((date) => toDate(date as string).getFullYear()));
+  const endYear = Math.max(currentYear + 10, ...[maxDate, value].filter(Boolean).map((date) => toDate(date as string).getFullYear()));
+
   React.useEffect(() => { if (value) setMonth(toDate(value)); }, [value]);
 
   return (
@@ -85,8 +92,8 @@ function DateField({
             locale={calendarLocale(i18n.language)}
             weekStartsOn={1}
             captionLayout="dropdown"
-            startMonth={new Date(new Date().getFullYear() - 5, 0)}
-            endMonth={new Date(new Date().getFullYear() + 5, 11)}
+            startMonth={new Date(startYear, 0)}
+            endMonth={new Date(endYear, 11)}
             disabled={[
               ...(minDate ? [{ before: toDate(minDate) }] : []),
               ...(maxDate ? [{ after: toDate(maxDate) }] : []),

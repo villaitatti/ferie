@@ -106,7 +106,9 @@ export function Admin() {
     <PageHeading eyebrow="HR operations" title={t("administration")} />
 
     <Tabs defaultValue="sensitive">
-      <TabsList className="flex-wrap">
+      {/* h-auto needs the important flag: the list's h-9 is variant-scoped and outweighs plain
+          utilities, so a wrapped second row would otherwise overflow under the active panel. */}
+      <TabsList className="h-auto! flex-wrap">
         <TabsTrigger value="sensitive"><LockKeyhole className="size-4" />{t("sensitiveEntry")}</TabsTrigger>
         <TabsTrigger value="balances"><FileSpreadsheet className="size-4" />{t("balanceImport")}</TabsTrigger>
         <TabsTrigger value="reconciliation"><RefreshCw className="size-4" />{english ? "Reconciliation" : "Riconciliazione"}</TabsTrigger>

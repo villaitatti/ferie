@@ -26,7 +26,10 @@ function PickerSurface({ open, onOpenChange, trigger, title, children, align = "
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogTrigger render={trigger} />
-        <DialogContent className={cn("w-auto max-w-[calc(100vw-1.5rem)] gap-3 p-4", className)}>
+        {/* Bounded to the viewport with internal scrolling: a phone in landscape is shorter than the
+            month grid, and the dialog locks body scroll, so an unbounded panel would be clipped with
+            no way to reach the close button. */}
+        <DialogContent className={cn("max-h-[calc(100dvh-1rem)] w-auto max-w-[calc(100vw-1.5rem)] gap-3 overflow-y-auto p-4", className)}>
           <DialogHeader>
             <DialogTitle className="text-base">{title}</DialogTitle>
           </DialogHeader>

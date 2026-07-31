@@ -56,6 +56,13 @@ All notable changes to the Ferie Portal are documented in this file.
 - Screen-reader text ships in the interface language: the dialog and sheet close buttons announced the
   English "Close" regardless of language, the spinner hardcoded "Loading", and the year arrows in the
   month-and-year grid announced only the bare target year rather than the action.
+- The administration tab list grows in height when its five tabs wrap on a narrow screen, instead of
+  keeping a single-row height and letting the wrapped tabs slide under the active panel.
+- The mobile picker dialog is bounded to the viewport and scrolls internally, so a phone held in
+  landscape can still reach the close button and every calendar row.
+- Administration date fields reach any year the server accepts. The month-and-year dropdown gave them
+  an incidental ±5-year window, which cut off valid historical records; the window is now generous and
+  always stretches to cover the field's value and explicit bounds.
 - Local corrections to generated components, each commented where it is applied: the tab list
   styled its orientation against an attribute Base UI does not emit, which laid the panels out beside
   the tabs instead of below them; the calendar's day button never attached the ref it focuses, so
