@@ -1,0 +1,177 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens. The palette is the Villa I Tatti forest green scale that the portal has always
+ * used, expressed as the shadcn token set so every component inherits the brand without overrides.
+ */
+:root {
+  --radius: 0.375rem;
+
+  --background: oklch(97.13% 0.0025 165.08);
+  --foreground: oklch(24.08% 0.0162 168.54);
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(24.08% 0.0162 168.54);
+  --popover: oklch(100% 0 0);
+  --popover-foreground: oklch(24.08% 0.0162 168.54);
+  --primary: oklch(50.04% 0.0746 167.84);
+  --primary-foreground: oklch(99% 0.0017 145.56);
+  --secondary: oklch(96.9% 0.01 164.87);
+  --secondary-foreground: oklch(37.22% 0.0503 171.6);
+  --muted: oklch(95.63% 0.0025 165.07);
+  --muted-foreground: oklch(54.16% 0.0199 164.14);
+  --accent: oklch(96.9% 0.01 164.87);
+  --accent-foreground: oklch(37.22% 0.0503 171.6);
+  --destructive: oklch(55.52% 0.1734 28.6);
+  --destructive-foreground: oklch(99% 0.0017 145.56);
+  --border: oklch(90.73% 0.0076 164.92);
+  --input: oklch(90.73% 0.0076 164.92);
+  --ring: oklch(58.8% 0.0857 167.14);
+
+  --sidebar: oklch(99% 0.0017 145.56);
+  --sidebar-foreground: oklch(24.08% 0.0162 168.54);
+  --sidebar-primary: oklch(50.04% 0.0746 167.84);
+  --sidebar-primary-foreground: oklch(99% 0.0017 145.56);
+  --sidebar-accent: oklch(96.9% 0.01 164.87);
+  --sidebar-accent-foreground: oklch(37.22% 0.0503 171.6);
+  --sidebar-border: oklch(90.73% 0.0076 164.92);
+  --sidebar-ring: oklch(58.8% 0.0857 167.14);
+
+  --chart-1: oklch(50.04% 0.0746 167.84);
+  --chart-2: oklch(59.95% 0.1183 55.42);
+  --chart-3: oklch(47.07% 0.0874 249.7);
+  --chart-4: oklch(53.52% 0.1276 306.21);
+  --chart-5: oklch(72.61% 0.1503 80.19);
+
+  /* Brand scale, kept addressable for the few places that need a specific step. */
+  --forest-50: oklch(96.9% 0.01 164.87);
+  --forest-100: oklch(92.89% 0.02 164.57);
+  --forest-200: oklch(85.65% 0.0421 163.03);
+  --forest-300: oklch(77.14% 0.0637 164.22);
+  --forest-400: oklch(67.74% 0.0831 165.28);
+  --forest-500: oklch(58.8% 0.0857 167.14);
+  --forest-600: oklch(50.04% 0.0746 167.84);
+  --forest-700: oklch(43.06% 0.0623 169.02);
+  --forest-800: oklch(37.22% 0.0503 171.6);
+  --forest-900: oklch(30.93% 0.0416 172.83);
+
+  /*
+   * Status tones. Absence states, balances and reconciliation all speak in the same six colours, so
+   * they live here once instead of being repeated as Tailwind literals across pages.
+   */
+  --tone-green: oklch(53.1% 0.0968 159.65);
+  --tone-green-soft: oklch(96.9% 0.01 164.87);
+  --tone-yellow: oklch(52% 0.1 80.19);
+  --tone-yellow-soft: oklch(96.5% 0.031 96);
+  --tone-orange: oklch(52% 0.115 50);
+  --tone-orange-soft: oklch(96% 0.03 70);
+  --tone-red: oklch(55.52% 0.1734 28.6);
+  --tone-red-soft: oklch(96% 0.025 22);
+  --tone-blue: oklch(52.27% 0.1 244.2);
+  --tone-blue-soft: oklch(96% 0.02 240);
+  --tone-violet: oklch(53.52% 0.1276 306.21);
+  --tone-violet-soft: oklch(96% 0.022 305);
+  --tone-gray: oklch(46.69% 0.0216 165.58);
+  --tone-gray-soft: oklch(95.63% 0.0025 165.07);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-forest-50: var(--forest-50);
+  --color-forest-100: var(--forest-100);
+  --color-forest-200: var(--forest-200);
+  --color-forest-300: var(--forest-300);
+  --color-forest-400: var(--forest-400);
+  --color-forest-500: var(--forest-500);
+  --color-forest-600: var(--forest-600);
+  --color-forest-700: var(--forest-700);
+  --color-forest-800: var(--forest-800);
+  --color-forest-900: var(--forest-900);
+
+  --color-tone-green: var(--tone-green);
+  --color-tone-green-soft: var(--tone-green-soft);
+  --color-tone-yellow: var(--tone-yellow);
+  --color-tone-yellow-soft: var(--tone-yellow-soft);
+  --color-tone-orange: var(--tone-orange);
+  --color-tone-orange-soft: var(--tone-orange-soft);
+  --color-tone-red: var(--tone-red);
+  --color-tone-red-soft: var(--tone-red-soft);
+  --color-tone-blue: var(--tone-blue);
+  --color-tone-blue-soft: var(--tone-blue-soft);
+  --color-tone-violet: var(--tone-violet);
+  --color-tone-violet-soft: var(--tone-violet-soft);
+  --color-tone-gray: var(--tone-gray);
+  --color-tone-gray-soft: var(--tone-gray-soft);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-width: 320px;
+    font-synthesis: none;
+  }
+
+  /* Native form chrome never shows: every control in the portal is a shadcn component. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}

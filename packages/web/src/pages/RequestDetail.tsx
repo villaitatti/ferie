@@ -1,17 +1,22 @@
-import { Alert, Button, Divider, Group, Modal, SimpleGrid, Stack, Text, Textarea, Title } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, Check, Pencil, ShieldCheck, X } from "lucide-react";
+import { AlertCircleIcon, ArrowLeft, Check, Pencil, ShieldCheck, X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "../api";
-import { EmptyState, PageLoader, Quantity, RequestRow, StatusBadge } from "../components";
-import { formatPortalDateTime } from "../request-calendar";
 import type { RequestDetail as RequestDetailResponse } from "@ferie/shared";
 
-type Decision = "APPROVE" | "DECLINE" | "ESCALATE";
+import { api } from "../api";
+import { EmptyState, PageLoader, Quantity, RequestRow, SectionTitle, StatusBadge } from "../components";
+import { formatPortalDateTime } from "../request-calendar";
+import { cn } from "@/lib/utils";
+import { type Decision, decisionKey, decisionTone } from "@/lib/decisions";
+import { toneBorder, toneSoft, toneSoftButton, toneSolid } from "@/lib/tone";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { TextareaField } from "@/components/ui/text-field";
 
 function decisionLabel(action: string, language: string) {
   const labels: Record<string, { it: string; en: string }> = {
@@ -30,7 +35,6 @@ export function RequestDetail() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [opened, { open, close }] = useDisclosure(false);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [comment, setComment] = useState("");
   const detail = useQuery({ queryKey: ["request", id], queryFn: () => api<RequestDetailResponse>(`/requests/${id}`), enabled: Boolean(id) });
@@ -44,7 +48,7 @@ export function RequestDetail() {
   };
   const decide = useMutation({
     mutationFn: (action: Decision) => api(`/requests/${id}/decision`, { method: "POST", body: JSON.stringify({ action, comment: comment || undefined, expectedStatus: detail.data?.status }) }),
-    onSuccess: async () => { toast.success(t("decisionSaved")); close(); setComment(""); await refresh(); },
+    onSuccess: async () => { toast.success(t("decisionSaved")); setDecision(null); setComment(""); await refresh(); },
     onError: (error: Error) => toast.error(error.message),
   });
   const withdraw = useMutation({
@@ -52,47 +56,96 @@ export function RequestDetail() {
     onSuccess: refresh,
     onError: (error: Error) => toast.error(error.message),
   });
-  const choose = (action: Decision) => { setDecision(action); open(); };
+  const choose = (action: Decision) => { setDecision(action); setComment(""); };
 
   if (detail.isLoading) return <PageLoader />;
   if (detail.isError || !detail.data) return <EmptyState>{i18n.language === "en" ? "This request is unavailable or you no longer have access." : "Questa richiesta non è disponibile o non hai più accesso."}</EmptyState>;
   const item = detail.data;
   const backPath = item.permissions.approvalContext ? "/approvals" : "/requests";
+  const title = decision ? t(decisionKey(decision)) : "";
 
-  return <Stack gap="xl">
+  return <div className="flex flex-col gap-8">
     <div>
-      <Button variant="subtle" color="gray" px={0} leftSection={<ArrowLeft size={17} />} onClick={() => navigate(backPath)}>{i18n.language === "en" ? "Back" : "Indietro"}</Button>
-      <Text size="sm" c="dimmed" mt="sm">{i18n.language === "en" ? "Request details" : "Dettaglio della richiesta"}</Text>
-      <Title order={1}>{i18n.language === "en" ? item.absenceTypeLabelEn : item.absenceTypeLabelIt}</Title>
+      <Button variant="ghost" className="-ml-3 gap-2 text-muted-foreground" onClick={() => navigate(backPath)}>
+        <ArrowLeft className="size-[17px] shrink-0" />{i18n.language === "en" ? "Back" : "Indietro"}
+      </Button>
+      <p className="mt-3 text-sm text-muted-foreground">{i18n.language === "en" ? "Request details" : "Dettaglio della richiesta"}</p>
+      <h1 className="text-[clamp(1.65rem,2.5vw,2.15rem)] leading-tight font-bold">{i18n.language === "en" ? item.absenceTypeLabelEn : item.absenceTypeLabelIt}</h1>
     </div>
+
     <RequestRow item={item} />
-    <Group justify="flex-end">
-      {item.permissions.canModify && <Button variant="light" leftSection={<Pencil size={16} />} onClick={() => navigate(`/new?revision=${item.id}`)}>{i18n.language === "en" ? "Change" : "Modifica"}</Button>}
-      {(item.permissions.canWithdraw || item.permissions.canRequestCancellation) && <Button variant="subtle" color="red" loading={withdraw.isPending} onClick={() => withdraw.mutate()}>{item.permissions.canRequestCancellation ? t("cancelRequest") : t("withdraw")}</Button>}
+
+    <div className="flex flex-wrap justify-end gap-2">
+      {item.permissions.canModify && <Button variant="secondary" onClick={() => navigate(`/new?revision=${item.id}`)}><Pencil className="size-4" />{i18n.language === "en" ? "Change" : "Modifica"}</Button>}
+      {(item.permissions.canWithdraw || item.permissions.canRequestCancellation) && (
+        <Button variant="ghost" className="text-destructive hover:text-destructive" loading={withdraw.isPending} onClick={() => withdraw.mutate()}>
+          {item.permissions.canRequestCancellation ? t("cancelRequest") : t("withdraw")}
+        </Button>
+      )}
       {item.permissions.canDecide && <>
-        <Button variant="light" color="red" leftSection={<X size={15} />} onClick={() => choose("DECLINE")}>{t("decline")}</Button>
+        <Button variant="secondary" className={toneSoftButton.red} onClick={() => choose("DECLINE")}><X className="size-[15px]" />{t("decline")}</Button>
         {item.overBalance && item.status === "PENDING_APPROVAL"
-          ? <Button color="orange" leftSection={<ShieldCheck size={15} />} onClick={() => choose("ESCALATE")}>{t("escalate")}</Button>
-          : <Button color="green" leftSection={<Check size={15} />} onClick={() => choose("APPROVE")}>{t("approve")}</Button>}
+          ? <Button className={toneSolid.orange} onClick={() => choose("ESCALATE")}><ShieldCheck className="size-[15px]" />{t("escalate")}</Button>
+          : <Button className={toneSolid.green} onClick={() => choose("APPROVE")}><Check className="size-[15px]" />{t("approve")}</Button>}
       </>}
-    </Group>
-    <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl" className="request-detail-grid">
-      <section>
-        <Title order={2}>{i18n.language === "en" ? "Balance allocation" : "Ripartizione del saldo"}</Title>
-        <Divider my="sm" />
-        {item.allocations.length ? <Stack gap="xs">{item.allocations.map((allocation) => <Group key={allocation.accountCode} justify="space-between"><Text>{allocation.accountCode.replace("_", " ")}</Text><Text fw={700}><Quantity amount={allocation.amount} unit={item.unit} /></Text></Group>)}</Stack> : <Text c="dimmed">{i18n.language === "en" ? "No balance allocation." : "Nessuna ripartizione del saldo."}</Text>}
+    </div>
+
+    <div className="grid gap-8 md:grid-cols-2">
+      <section className="min-w-0">
+        <SectionTitle>{i18n.language === "en" ? "Balance allocation" : "Ripartizione del saldo"}</SectionTitle>
+        <Separator className="my-3" />
+        {item.allocations.length ? (
+          <div className="flex flex-col gap-2">
+            {item.allocations.map((allocation) => (
+              <div key={allocation.accountCode} className="flex items-center justify-between gap-3">
+                <span>{allocation.accountCode.replace("_", " ")}</span>
+                <strong className="font-bold"><Quantity amount={allocation.amount} unit={item.unit} /></strong>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-muted-foreground">{i18n.language === "en" ? "No balance allocation." : "Nessuna ripartizione del saldo."}</p>}
       </section>
-      <section>
-        <Title order={2}>{i18n.language === "en" ? "Approval history" : "Cronologia dell'approvazione"}</Title>
-        <Divider my="sm" />
-        <Stack gap="md">{item.decisions.map((entry) => <div key={entry.id} className="request-history-entry">
-          <Group justify="space-between" align="flex-start"><div><Text fw={700}>{decisionLabel(entry.action, i18n.language)}</Text><Text size="sm" c="dimmed">{entry.actorName} · {formatPortalDateTime(entry.createdAt, i18n.language)}</Text></div><StatusBadge status={entry.toStatus} /></Group>
-          {entry.comment && <Text size="sm" mt={6}>{entry.comment}</Text>}
-        </div>)}</Stack>
+
+      <section className="min-w-0">
+        <SectionTitle>{i18n.language === "en" ? "Approval history" : "Cronologia dell'approvazione"}</SectionTitle>
+        <Separator className="my-3" />
+        <div className="flex flex-col gap-4">
+          {item.decisions.map((entry) => (
+            <div key={entry.id} className="request-history-entry">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold">{decisionLabel(entry.action, i18n.language)}</p>
+                  <p className="text-sm text-muted-foreground">{entry.actorName} · {formatPortalDateTime(entry.createdAt, i18n.language)}</p>
+                </div>
+                <StatusBadge status={entry.toStatus} />
+              </div>
+              {entry.comment && <p className="mt-1.5 text-sm">{entry.comment}</p>}
+            </div>
+          ))}
+        </div>
       </section>
-    </SimpleGrid>
-    <Modal opened={opened} onClose={close} title={decision ? t(decision === "APPROVE" ? "approve" : decision === "DECLINE" ? "decline" : "escalate") : ""} centered>
-      <Stack>{item.overBalance && <Alert color="orange" icon={<AlertCircle size={18} />}>{t("warningOver")}</Alert>}<Textarea label={i18n.language === "en" ? "Comment (optional)" : "Commento (facoltativo)"} maxLength={500} value={comment} onChange={(event) => setComment(event.currentTarget.value)} /><Group justify="flex-end"><Button variant="default" onClick={close}>{i18n.language === "en" ? "Cancel" : "Annulla"}</Button><Button color={decision === "DECLINE" ? "red" : decision === "ESCALATE" ? "orange" : "green"} loading={decide.isPending} onClick={() => decision && decide.mutate(decision)}>{decision ? t(decision === "APPROVE" ? "approve" : decision === "DECLINE" ? "decline" : "escalate") : ""}</Button></Group></Stack>
-    </Modal>
-  </Stack>;
+    </div>
+
+    <Dialog open={Boolean(decision)} onOpenChange={(next) => { if (!next) setDecision(null); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        {item.overBalance && (
+          <Alert className={cn(toneSoft.orange, toneBorder.orange)}>
+            <AlertCircleIcon />
+            <AlertDescription className="text-current">{t("warningOver")}</AlertDescription>
+          </Alert>
+        )}
+        <TextareaField
+          label={i18n.language === "en" ? "Comment (optional)" : "Commento (facoltativo)"}
+          maxLength={500}
+          value={comment}
+          onChange={(event) => setComment(event.currentTarget.value)}
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setDecision(null)}>{i18n.language === "en" ? "Cancel" : "Annulla"}</Button>
+          <Button className={toneSolid[decisionTone(decision)]} loading={decide.isPending} onClick={() => decision && decide.mutate(decision)}>{title}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>;
 }

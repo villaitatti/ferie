@@ -1,16 +1,23 @@
-import { Badge, Button, Group, Paper, Skeleton, Stack, Text, ThemeIcon } from "@mantine/core";
-import { AlertCircle, CalendarDays } from "lucide-react";
+import { AlertCircleIcon, CalendarDaysIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
+
 import type { BalanceSummary, RequestListItem } from "./api";
 import { formatPortalDate } from "./request-calendar";
+import { cn } from "@/lib/utils";
+import { toneSoft, toneText, type Tone } from "@/lib/tone";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const statusColors: Record<string, string> = {
+const statusTones: Record<string, Tone> = {
   APPROVED: "green",
   DECLINED: "red",
   PENDING_APPROVAL: "yellow",
   PENDING_FINAL_APPROVAL: "orange",
   WITHDRAWN: "gray",
-  CANCELLATION_REQUESTED: "grape",
+  CANCELLATION_REQUESTED: "violet",
   CANCELLED: "gray",
 };
 
@@ -29,7 +36,7 @@ const statusLabels: Record<string, { it: string; en: string }> = {
 export function StatusBadge({ status }: { status: string }) {
   const { i18n } = useTranslation();
   const label = statusLabels[status]?.[i18n.language === "en" ? "en" : "it"] ?? status;
-  return <Badge color={statusColors[status] ?? "gray"} variant="light">{label}</Badge>;
+  return <Badge variant="ghost" className={cn("border-transparent", toneSoft[statusTones[status] ?? "gray"])}>{label}</Badge>;
 }
 
 export function Quantity({ amount, unit }: { amount: number; unit: string }) {
@@ -42,49 +49,102 @@ export function Quantity({ amount, unit }: { amount: number; unit: string }) {
 export function BalanceTile({ balance }: { balance: BalanceSummary }) {
   const { t, i18n } = useTranslation();
   return (
-    <Paper className="balance-tile" withBorder>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Text size="sm" c="dimmed" fw={600}>{i18n.language === "en" ? balance.labelEn : balance.labelIt}</Text>
-          <Text className="balance-value" component="div">{balance.projected === null ? "—" : <Quantity amount={balance.projected} unit={balance.unit} />}</Text>
+    <Card className="balance-tile gap-0 p-[18px]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-muted-foreground">{i18n.language === "en" ? balance.labelEn : balance.labelIt}</p>
+          <p className="mt-1 text-[1.75rem] leading-tight font-extrabold">
+            {balance.projected === null ? "—" : <Quantity amount={balance.projected} unit={balance.unit} />}
+          </p>
         </div>
-        <ThemeIcon variant="light" color={balance.stale ? "orange" : "forest"} size="lg"><CalendarDays size={19} /></ThemeIcon>
-      </Group>
-      {balance.projected === null ? <Text size="xs" c="orange">{t("noBalance")}</Text> : (
-        <Group gap="md" mt="sm">
-          <Text size="xs" c="dimmed">{t("imported")}: <strong><Quantity amount={balance.imported ?? 0} unit={balance.unit} /></strong></Text>
-          <Text size="xs" c="dimmed">{t("pending")}: <strong><Quantity amount={balance.pending} unit={balance.unit} /></strong></Text>
-        </Group>
+        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", toneSoft[balance.stale ? "orange" : "primary"])}>
+          <CalendarDaysIcon className="size-[19px]" />
+        </span>
+      </div>
+      {balance.projected === null ? (
+        <p className={cn("mt-3 text-xs", toneText.orange)}>{t("noBalance")}</p>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <span>{t("imported")}: <strong className="font-semibold"><Quantity amount={balance.imported ?? 0} unit={balance.unit} /></strong></span>
+          <span>{t("pending")}: <strong className="font-semibold"><Quantity amount={balance.pending} unit={balance.unit} /></strong></span>
+        </div>
       )}
-      {balance.projected !== null && <Text size="xs" c={balance.stale ? "orange" : "dimmed"} mt={6}>{balance.asOf ? `${t("asOf")} ${formatPortalDate(balance.asOf, i18n.language)}` : t("stale")}</Text>}
-    </Paper>
+      {balance.projected !== null && (
+        <p className={cn("mt-1.5 text-xs", balance.stale ? toneText.orange : "text-muted-foreground")}>
+          {balance.asOf ? `${t("asOf")} ${formatPortalDate(balance.asOf, i18n.language)}` : t("stale")}
+        </p>
+      )}
+    </Card>
   );
 }
 
 export function RequestRow({ item, actions }: { item: RequestListItem; actions?: React.ReactNode }) {
   const { i18n } = useTranslation();
   return (
-    <Paper className="request-row" withBorder>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div className="request-main">
-          <Group gap="xs"><Text fw={700}>{i18n.language === "en" ? item.absenceTypeLabelEn : item.absenceTypeLabelIt}</Text><StatusBadge status={item.status} /></Group>
-          <Text size="sm" c="dimmed">{item.employeeName} · {item.departmentName}</Text>
-          <Text size="sm" mt={6}>{formatPortalDate(item.startDate, i18n.language)}{item.endDate !== item.startDate ? ` – ${formatPortalDate(item.endDate, i18n.language)}` : ""}{item.startTime ? ` · ${item.startTime}–${item.endTime}` : ""}</Text>
+    <Card className="gap-0 px-[18px] py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-bold">{i18n.language === "en" ? item.absenceTypeLabelEn : item.absenceTypeLabelIt}</p>
+            <StatusBadge status={item.status} />
+          </div>
+          <p className="text-sm text-muted-foreground">{item.employeeName} · {item.departmentName}</p>
+          <p className="mt-1.5 text-sm">
+            {formatPortalDate(item.startDate, i18n.language)}
+            {item.endDate !== item.startDate ? ` – ${formatPortalDate(item.endDate, i18n.language)}` : ""}
+            {item.startTime ? ` · ${item.startTime}–${item.endTime}` : ""}
+          </p>
         </div>
-        <Stack gap={6} align="flex-end">
-          <Text fw={700}><Quantity amount={item.quantity} unit={item.unit} /></Text>
-          {item.overBalance && <Badge color="orange" leftSection={<AlertCircle size={12} />}>{i18n.language === "en" ? "Over balance" : "Saldo superato"}</Badge>}
-        </Stack>
-      </Group>
-      {actions && <Group mt="md" justify="flex-end">{actions}</Group>}
-    </Paper>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <p className="font-bold whitespace-nowrap"><Quantity amount={item.quantity} unit={item.unit} /></p>
+          {item.overBalance && (
+            <Badge variant="ghost" className={cn("gap-1", toneSoft.orange)}>
+              <AlertCircleIcon className="size-3" />
+              {i18n.language === "en" ? "Over balance" : "Saldo superato"}
+            </Badge>
+          )}
+        </div>
+      </div>
+      {actions && <div className="mt-4 flex flex-wrap justify-end gap-2">{actions}</div>}
+    </Card>
   );
 }
 
+/** Every page opens the same way: a quiet context line, the title, and optionally one page action. */
+export function PageHeading({ eyebrow, title, children }: { eyebrow?: React.ReactNode; title: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        {eyebrow ? <p className="text-sm text-muted-foreground">{eyebrow}</p> : null}
+        <h1 className="text-[clamp(1.65rem,2.5vw,2.15rem)] leading-tight font-bold">{title}</h1>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export function SectionTitle({ className, ...props }: React.ComponentProps<"h2">) {
+  return <h2 className={cn("text-[1.12rem] font-semibold", className)} {...props} />;
+}
+
+export function PanelTitle({ className, ...props }: React.ComponentProps<"h3">) {
+  return <h3 className={cn("text-base font-semibold", className)} {...props} />;
+}
+
 export function PageLoader() {
-  return <Stack gap="md"><Skeleton height={70} /><Skeleton height={130} /><Skeleton height={130} /></Stack>;
+  return <div className="flex flex-col gap-4"><Skeleton className="h-[70px] w-full" /><Skeleton className="h-[130px] w-full" /><Skeleton className="h-[130px] w-full" /></div>;
 }
 
 export function EmptyState({ children, action }: { children: React.ReactNode; action?: { label: string; onClick: () => void } }) {
-  return <div className="empty-state"><CalendarDays size={34} strokeWidth={1.5} /><Text c="dimmed">{children}</Text>{action && <Button variant="light" onClick={action.onClick}>{action.label}</Button>}</div>;
+  return (
+    <Empty className="min-h-[180px] rounded-md border bg-card/60">
+      <EmptyHeader>
+        <EmptyMedia>
+          <CalendarDaysIcon className="size-[34px] text-muted-foreground" strokeWidth={1.5} />
+        </EmptyMedia>
+        <EmptyDescription>{children}</EmptyDescription>
+      </EmptyHeader>
+      {action && <EmptyContent><Button variant="secondary" onClick={action.onClick}>{action.label}</Button></EmptyContent>}
+    </Empty>
+  );
 }

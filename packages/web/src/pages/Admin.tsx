@@ -1,13 +1,28 @@
-import { Alert, Badge, Button, FileInput, Group, NumberInput, Paper, Select, SimpleGrid, Stack, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
-import { DateInput } from "@mantine/dates";
 import { Temporal } from "@js-temporal/polyfill";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarPlus, FileSpreadsheet, History, LockKeyhole, RefreshCw, Upload } from "lucide-react";
+import { CalendarPlus, FileSpreadsheet, History, LockKeyhole, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+
 import { api, ApiError } from "../api";
-import { formatPortalDateTime, toDateOnlyString } from "../request-calendar";
+import { PageHeading, PanelTitle } from "../components";
+import { formatPortalDateTime } from "../request-calendar";
+import { cn } from "@/lib/utils";
+import { toneSoft } from "@/lib/tone";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ComboboxField } from "@/components/ui/combobox-field";
+import { DateField } from "@/components/ui/date-field";
+import { FileField } from "@/components/ui/file-field";
+import { NumberField } from "@/components/ui/number-field";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { SelectField } from "@/components/ui/select-field";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TextField, TextareaField } from "@/components/ui/text-field";
 
 interface AdminData {
   employees: Array<{ id: string; employeeNumber: string; displayName: string; departmentName: string }>;
@@ -22,6 +37,7 @@ interface FutureImportError { rowNumber: number; code: string; conflictingRowNum
 
 export function Admin() {
   const { t, i18n } = useTranslation();
+  const english = i18n.language === "en";
   const queryClient = useQueryClient();
   const data = useQuery({ queryKey: ["admin"], queryFn: () => api<AdminData>("/admin") });
   const holidays = useQuery({ queryKey: ["holidays"], queryFn: () => api<Holiday[]>("/admin/holidays") });
@@ -36,7 +52,7 @@ export function Admin() {
   const [cutoff, setCutoff] = useState(today);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [holiday, setHoliday] = useState({ code: "", labelIt: "", labelEn: "", oneOffDate: today });
-  const [adjustment, setAdjustment] = useState({ employeeId: "", accountCode: "FERIE", amount: 0 as number | string, effectiveDate: today, reason: "" });
+  const [adjustment, setAdjustment] = useState({ employeeId: "", accountCode: "FERIE", amount: 0 as number | null, effectiveDate: today, reason: "" });
   const [resolution, setResolution] = useState({ id: "", text: "" });
   const sensitive = useMutation({
     mutationFn: () => api("/admin/sensitive-absences", { method: "POST", body: JSON.stringify({ employeeId, absenceTypeCode, startDate, endDate }) }),
@@ -50,56 +66,312 @@ export function Admin() {
   });
   const commit = useMutation({
     mutationFn: () => api("/admin/balance-imports", { method: "POST", body: JSON.stringify(preview?.input) }),
-    onSuccess: async () => { toast.success(i18n.language === "en" ? "Import committed" : "Importazione completata"); setPreview(null); setFile(null); await queryClient.invalidateQueries(); },
+    onSuccess: async () => { toast.success(english ? "Import committed" : "Importazione completata"); setPreview(null); setFile(null); await queryClient.invalidateQueries(); },
     onError: (error: Error) => toast.error(error.message),
   });
   const importFuture = useMutation({
     mutationFn: async () => { const form = new FormData(); if (futureFile) form.append("file", futureFile); return api<{ createdIds: string[]; errors: unknown[] }>("/admin/future-absence-imports/file", { method: "POST", body: form }); },
     onMutate: () => setFutureErrors([]),
-    onSuccess: async (result) => { toast.success(i18n.language === "en" ? `${result.createdIds.length} records imported` : `${result.createdIds.length} assenze importate`); setFutureErrors([]); setFutureFile(null); await queryClient.invalidateQueries(); },
+    onSuccess: async (result) => { toast.success(english ? `${result.createdIds.length} records imported` : `${result.createdIds.length} assenze importate`); setFutureErrors([]); setFutureFile(null); await queryClient.invalidateQueries(); },
     onError: (error: Error) => {
       const details = error instanceof ApiError && typeof error.details === "object" && error.details !== null ? error.details as { errors?: FutureImportError[] } : undefined;
       setFutureErrors(details?.errors ?? []);
-      toast.error(i18n.language === "en" ? "The file contains errors. Nothing was imported." : "Il file contiene errori. Nessuna assenza è stata importata.");
+      toast.error(english ? "The file contains errors. Nothing was imported." : "Il file contiene errori. Nessuna assenza è stata importata.");
     },
   });
   const adjust = useMutation({
     mutationFn: () => api("/admin/balance-adjustments", { method: "POST", body: JSON.stringify({ ...adjustment, amount: Number(adjustment.amount) }) }),
-    onSuccess: async () => { toast.success(i18n.language === "en" ? "Adjustment recorded" : "Rettifica registrata"); setAdjustment({ employeeId: "", accountCode: "FERIE", amount: 0, effectiveDate: today, reason: "" }); await queryClient.invalidateQueries(); },
+    onSuccess: async () => { toast.success(english ? "Adjustment recorded" : "Rettifica registrata"); setAdjustment({ employeeId: "", accountCode: "FERIE", amount: 0, effectiveDate: today, reason: "" }); await queryClient.invalidateQueries(); },
     onError: (error: Error) => toast.error(error.message),
   });
   const resolve = useMutation({
     mutationFn: () => api(`/admin/reconciliations/${resolution.id}/resolve`, { method: "POST", body: JSON.stringify({ resolution: resolution.text }) }),
-    onSuccess: async () => { toast.success(i18n.language === "en" ? "Case resolved" : "Caso risolto"); setResolution({ id: "", text: "" }); await queryClient.invalidateQueries({ queryKey: ["admin"] }); },
+    onSuccess: async () => { toast.success(english ? "Case resolved" : "Caso risolto"); setResolution({ id: "", text: "" }); await queryClient.invalidateQueries({ queryKey: ["admin"] }); },
     onError: (error: Error) => toast.error(error.message),
   });
   const saveHoliday = useMutation({
     mutationFn: () => api("/admin/holidays", { method: "PUT", body: JSON.stringify({ ...holiday, kind: "CUSTOM", recurrence: "ONE_OFF", active: true }) }),
-    onSuccess: async () => { toast.success(i18n.language === "en" ? "Closure saved" : "Chiusura salvata"); setHoliday({ code: "", labelIt: "", labelEn: "", oneOffDate: today }); await queryClient.invalidateQueries({ queryKey: ["holidays"] }); },
+    onSuccess: async () => { toast.success(english ? "Closure saved" : "Chiusura salvata"); setHoliday({ code: "", labelIt: "", labelEn: "", oneOffDate: today }); await queryClient.invalidateQueries({ queryKey: ["holidays"] }); },
     onError: (error: Error) => toast.error(error.message),
   });
   const updateVisibility = useMutation({
     mutationFn: ({ id, departmentVisibility }: { id: string; departmentVisibility: string }) => api(`/admin/absence-types/${id}/visibility`, { method: "PATCH", body: JSON.stringify({ departmentVisibility }) }),
-    onSuccess: async () => { toast.success(i18n.language === "en" ? "Calendar visibility updated" : "Visibilità calendario aggiornata"); await queryClient.invalidateQueries({ queryKey: ["admin"] }); },
+    onSuccess: async () => { toast.success(english ? "Calendar visibility updated" : "Visibilità calendario aggiornata"); await queryClient.invalidateQueries({ queryKey: ["admin"] }); },
     onError: (error: Error) => toast.error(error.message),
   });
-  const dateInputProps = { locale: i18n.language === "en" ? "en" : "it", valueFormat: "DD MMMM YYYY", firstDayOfWeek: 1 as const };
 
-  return <Stack gap="lg"><div><Text size="sm" c="dimmed">HR operations</Text><Title order={1}>{t("administration")}</Title></div>
+  const employeeOptions = data.data?.employees.map((entry) => ({ value: entry.id, label: `${entry.displayName} · ${entry.departmentName}` })) ?? [];
+
+  return <div className="flex flex-col gap-6">
+    <PageHeading eyebrow="HR operations" title={t("administration")} />
+
     <Tabs defaultValue="sensitive">
-      <Tabs.List><Tabs.Tab value="sensitive" leftSection={<LockKeyhole size={16} />}>{t("sensitiveEntry")}</Tabs.Tab><Tabs.Tab value="balances" leftSection={<FileSpreadsheet size={16} />}>{t("balanceImport")}</Tabs.Tab><Tabs.Tab value="reconciliation" leftSection={<RefreshCw size={16} />}>{i18n.language === "en" ? "Reconciliation" : "Riconciliazione"}</Tabs.Tab><Tabs.Tab value="holidays" leftSection={<CalendarPlus size={16} />}>{t("holidayRules")}</Tabs.Tab><Tabs.Tab value="audit" leftSection={<History size={16} />}>{t("audit")}</Tabs.Tab></Tabs.List>
-      <Tabs.Panel value="sensitive" pt="lg"><Stack><Paper className="tool-panel" withBorder p="lg" maw={760}><Stack><Alert color="blue">{i18n.language === "en" ? "Dates only. Do not enter diagnoses or medical notes." : "Solo date. Non inserire diagnosi o dettagli medici."}</Alert><Select searchable label={t("employee")} value={employeeId} onChange={setEmployeeId} data={data.data?.employees.map((entry) => ({ value: entry.id, label: `${entry.displayName} · ${entry.departmentName}` })) ?? []} /><Select label={t("type")} value={absenceTypeCode} onChange={(value) => setAbsenceTypeCode(value ?? "MALATTIA")} data={[{ value: "MALATTIA", label: i18n.language === "en" ? "Sick leave" : "Malattia" }, { value: "LEGGE_104", label: "Legge 104" }, { value: "CONGEDO_PARENTALE", label: i18n.language === "en" ? "Parental leave" : "Congedo parentale" }]} /><SimpleGrid cols={{ base: 1, sm: 2 }}><DateInput {...dateInputProps} label={t("startDate")} value={startDate} onChange={(value) => setStartDate(toDateOnlyString(value) ?? "")} /><DateInput {...dateInputProps} minDate={startDate} label={t("endDate")} value={endDate} onChange={(value) => setEndDate(toDateOnlyString(value) ?? "")} /></SimpleGrid><Group justify="flex-end"><Button onClick={() => sensitive.mutate()} disabled={!employeeId} loading={sensitive.isPending}>{t("save")}</Button></Group></Stack></Paper><Paper withBorder maw={760}><Table><Table.Thead><Table.Tr><Table.Th>{t("type")}</Table.Th><Table.Th>{i18n.language === "en" ? "Department calendar" : "Calendario del reparto"}</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{data.data?.absenceTypes.map((entry) => <Table.Tr key={entry.id}><Table.Td>{i18n.language === "en" ? entry.labelEn : entry.labelIt}{entry.sensitivity === "SENSITIVE" && <Badge ml="xs" color="grape" variant="light">Sensitive</Badge>}</Table.Td><Table.Td><Select size="xs" value={entry.departmentVisibility} onChange={(value) => value && updateVisibility.mutate({ id: entry.id, departmentVisibility: value })} data={[{ value: "EXACT", label: i18n.language === "en" ? "Name + exact type" : "Nome + tipo esatto" }, { value: "GENERIC", label: i18n.language === "en" ? "Name + absent" : "Nome + assente" }, { value: "HIDDEN", label: i18n.language === "en" ? "Hidden" : "Nascosto" }]} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Paper></Stack></Tabs.Panel>
-      <Tabs.Panel value="balances" pt="lg"><Stack>
-        <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Monthly balance file" : "File saldi mensile"}</Title><SimpleGrid cols={{ base: 1, sm: 2 }} mt="md"><FileInput label={t("chooseFile")} accept=".csv,.xlsx,.xls" value={file} onChange={setFile} leftSection={<Upload size={16} />} /><DateInput {...dateInputProps} label={t("cutoff")} value={cutoff} onChange={(value) => setCutoff(toDateOnlyString(value) ?? "")} /></SimpleGrid><Group justify="flex-end" mt="md"><Button variant="light" disabled={!file} loading={previewFile.isPending} onClick={() => previewFile.mutate()}>{t("importPreview")}</Button></Group></Paper>
-        {preview && <Paper withBorder p="md"><Group justify="space-between"><Group><Badge color="green">{preview.validCount} {i18n.language === "en" ? "valid" : "valide"}</Badge><Badge color={preview.errorCount ? "red" : "gray"}>{preview.errorCount} {i18n.language === "en" ? "errors" : "errori"}</Badge>{preview.duplicateBatchId && <Badge color="orange">{i18n.language === "en" ? "Duplicate" : "Duplicato"}</Badge>}</Group><Button disabled={preview.errorCount > 0 || Boolean(preview.duplicateBatchId)} loading={commit.isPending} onClick={() => commit.mutate()}>{i18n.language === "en" ? "Commit" : "Conferma"}</Button></Group><Table.ScrollContainer minWidth={620}><Table mt="md"><Table.Thead><Table.Tr><Table.Th>#</Table.Th><Table.Th>{t("employee")}</Table.Th><Table.Th>Account</Table.Th><Table.Th>{t("amount")}</Table.Th><Table.Th>{i18n.language === "en" ? "Validation" : "Verifica"}</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{preview.rows.slice(0, 25).map((row) => <Table.Tr key={row.rowNumber}><Table.Td>{row.rowNumber}</Table.Td><Table.Td>{row.employeeNumber}</Table.Td><Table.Td>{row.accountCode}</Table.Td><Table.Td>{row.amount}</Table.Td><Table.Td>{row.errors.join(", ") || "OK"}</Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper>}
-        <SimpleGrid cols={{ base: 1, lg: 2 }}>
-          <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Approved future absences" : "Assenze future già approvate"}</Title><FileInput mt="md" label={t("chooseFile")} accept=".csv,.xlsx,.xls" value={futureFile} onChange={(value) => { setFutureFile(value); setFutureErrors([]); }} leftSection={<Upload size={16} />} />{futureErrors.length > 0 && <Alert color="red" mt="md" title={i18n.language === "en" ? "File not imported" : "File non importato"}><Stack gap={4}>{futureErrors.slice(0, 8).map((error) => <Text size="sm" key={`${error.rowNumber}-${error.code}`}>{i18n.language === "en" ? "Row" : "Riga"} {error.rowNumber}: {error.code}{error.conflictingRowNumber ? ` (${i18n.language === "en" ? "conflicts with row" : "in conflitto con la riga"} ${error.conflictingRowNumber})` : ""}</Text>)}{futureErrors.length > 8 && <Text size="sm">+{futureErrors.length - 8} {i18n.language === "en" ? "more errors" : "altri errori"}</Text>}</Stack></Alert>}<Group justify="flex-end" mt="md"><Button variant="light" disabled={!futureFile} loading={importFuture.isPending} onClick={() => importFuture.mutate()}>{i18n.language === "en" ? "Import" : "Importa"}</Button></Group></Paper>
-          <Paper className="tool-panel" withBorder p="lg"><Title order={3}>{i18n.language === "en" ? "Manual adjustment" : "Rettifica manuale"}</Title><Stack mt="md"><Select searchable label={t("employee")} value={adjustment.employeeId} onChange={(value) => setAdjustment({ ...adjustment, employeeId: value ?? "" })} data={data.data?.employees.map((entry) => ({ value: entry.id, label: entry.displayName })) ?? []} /><SimpleGrid cols={2}><Select label="Account" value={adjustment.accountCode} onChange={(value) => setAdjustment({ ...adjustment, accountCode: value ?? "FERIE" })} data={["FERIE", "EX_FESTIVITA", "PERMESSO"]} /><NumberInput label={t("amount")} value={adjustment.amount} onChange={(value) => setAdjustment({ ...adjustment, amount: value })} /></SimpleGrid><DateInput {...dateInputProps} label={t("startDate")} value={adjustment.effectiveDate} onChange={(value) => setAdjustment({ ...adjustment, effectiveDate: toDateOnlyString(value) ?? "" })} /><Textarea label={i18n.language === "en" ? "Reason" : "Motivo"} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.currentTarget.value })} /><Group justify="flex-end"><Button disabled={!adjustment.employeeId || !adjustment.amount || adjustment.reason.length < 3} loading={adjust.isPending} onClick={() => adjust.mutate()}>{t("save")}</Button></Group></Stack></Paper>
-        </SimpleGrid>
-      </Stack></Tabs.Panel>
-      <Tabs.Panel value="reconciliation" pt="lg"><Stack>{data.data?.reconciliation.length ? <Paper withBorder><Table><Table.Thead><Table.Tr><Table.Th>{t("status")}</Table.Th><Table.Th>{i18n.language === "en" ? "Reference" : "Riferimento"}</Table.Th><Table.Th>{t("actions")}</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{data.data.reconciliation.map((entry) => <Table.Tr key={entry.id}><Table.Td><Badge color={entry.status === "DISCREPANCY" ? "orange" : entry.status === "RESOLVED" || entry.status === "MATCHED" ? "green" : "gray"}>{entry.status}</Badge></Table.Td><Table.Td>{entry.externalReference ?? "—"}</Table.Td><Table.Td><Button size="xs" variant="subtle" disabled={entry.status === "RESOLVED"} onClick={() => setResolution({ id: entry.id, text: "" })}>{i18n.language === "en" ? "Resolve" : "Risolvi"}</Button></Table.Td></Table.Tr>)}</Table.Tbody></Table></Paper> : <Text c="dimmed">{i18n.language === "en" ? "No reconciliation cases." : "Nessun caso di riconciliazione."}</Text>}{resolution.id && <Paper withBorder p="lg" maw={680}><Textarea label={i18n.language === "en" ? "Resolution" : "Risoluzione"} value={resolution.text} onChange={(event) => setResolution({ ...resolution, text: event.currentTarget.value })} /><Group justify="flex-end" mt="md"><Button variant="default" onClick={() => setResolution({ id: "", text: "" })}>{i18n.language === "en" ? "Cancel" : "Annulla"}</Button><Button disabled={resolution.text.length < 3} loading={resolve.isPending} onClick={() => resolve.mutate()}>{t("save")}</Button></Group></Paper>}</Stack></Tabs.Panel>
-      <Tabs.Panel value="holidays" pt="lg"><Stack><Paper withBorder p="lg" className="tool-panel"><Title order={3}>{i18n.language === "en" ? "Add one-off closure" : "Aggiungi chiusura una tantum"}</Title><SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} mt="md"><TextInput label="Code" value={holiday.code} onChange={(event) => setHoliday({ ...holiday, code: event.currentTarget.value })} /><TextInput label="Italiano" value={holiday.labelIt} onChange={(event) => setHoliday({ ...holiday, labelIt: event.currentTarget.value })} /><TextInput label="English" value={holiday.labelEn} onChange={(event) => setHoliday({ ...holiday, labelEn: event.currentTarget.value })} /><DateInput {...dateInputProps} label={t("startDate")} value={holiday.oneOffDate} onChange={(value) => setHoliday({ ...holiday, oneOffDate: toDateOnlyString(value) ?? "" })} /></SimpleGrid><Group justify="flex-end" mt="md"><Button disabled={!holiday.code.trim() || !holiday.labelIt.trim() || !holiday.labelEn.trim() || !holiday.oneOffDate} loading={saveHoliday.isPending} onClick={() => saveHoliday.mutate()}>{t("save")}</Button></Group></Paper><Paper withBorder><Table><Table.Thead><Table.Tr><Table.Th>Code</Table.Th><Table.Th>Italiano</Table.Th><Table.Th>English</Table.Th><Table.Th>Kind</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{holidays.data?.map((entry) => <Table.Tr key={entry.id}><Table.Td>{entry.code}</Table.Td><Table.Td>{entry.labelIt}</Table.Td><Table.Td>{entry.labelEn}</Table.Td><Table.Td><Badge variant="light">{entry.kind}</Badge></Table.Td></Table.Tr>)}</Table.Tbody></Table></Paper></Stack></Tabs.Panel>
-      <Tabs.Panel value="audit" pt="lg"><Paper withBorder><Table.ScrollContainer minWidth={700}><Table><Table.Thead><Table.Tr><Table.Th>When</Table.Th><Table.Th>Action</Table.Th><Table.Th>Entity</Table.Th><Table.Th>Actor</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{data.data?.audit.map((entry) => <Table.Tr key={entry.id}><Table.Td>{formatPortalDateTime(entry.createdAt, i18n.language)}</Table.Td><Table.Td>{entry.action}</Table.Td><Table.Td>{entry.entityType}</Table.Td><Table.Td>{entry.actorSubject}</Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper></Tabs.Panel>
+      {/* h-auto needs the important flag: the list's h-9 is variant-scoped and outweighs plain
+          utilities, so a wrapped second row would otherwise overflow under the active panel. */}
+      <TabsList className="h-auto! flex-wrap">
+        <TabsTrigger value="sensitive"><LockKeyhole className="size-4" />{t("sensitiveEntry")}</TabsTrigger>
+        <TabsTrigger value="balances"><FileSpreadsheet className="size-4" />{t("balanceImport")}</TabsTrigger>
+        <TabsTrigger value="reconciliation"><RefreshCw className="size-4" />{english ? "Reconciliation" : "Riconciliazione"}</TabsTrigger>
+        <TabsTrigger value="holidays"><CalendarPlus className="size-4" />{t("holidayRules")}</TabsTrigger>
+        <TabsTrigger value="audit"><History className="size-4" />{t("audit")}</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="sensitive" className="mt-6 flex flex-col gap-4">
+        <Card className="max-w-[760px] gap-4 p-6">
+          <Alert className={cn(toneSoft.blue)}>
+            <AlertDescription className="text-current">{english ? "Dates only. Do not enter diagnoses or medical notes." : "Solo date. Non inserire diagnosi o dettagli medici."}</AlertDescription>
+          </Alert>
+          <ComboboxField label={t("employee")} value={employeeId} onChange={setEmployeeId} data={employeeOptions} placeholder={t("employee")} emptyMessage={t("noIdentityMatches")} />
+          <SelectField
+            label={t("type")}
+            value={absenceTypeCode}
+            onChange={setAbsenceTypeCode}
+            data={[
+              { value: "MALATTIA", label: english ? "Sick leave" : "Malattia" },
+              { value: "LEGGE_104", label: "Legge 104" },
+              { value: "CONGEDO_PARENTALE", label: english ? "Parental leave" : "Congedo parentale" },
+            ]}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DateField label={t("startDate")} value={startDate} onChange={setStartDate} />
+            <DateField label={t("endDate")} value={endDate} onChange={setEndDate} minDate={startDate} />
+          </div>
+          <div className="flex justify-end">
+            <Button disabled={!employeeId} loading={sensitive.isPending} onClick={() => sensitive.mutate()}>{t("save")}</Button>
+          </div>
+        </Card>
+
+        <Card className="max-w-[760px] gap-0 overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("type")}</TableHead>
+                <TableHead>{english ? "Department calendar" : "Calendario del reparto"}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.data?.absenceTypes.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    {english ? entry.labelEn : entry.labelIt}
+                    {entry.sensitivity === "SENSITIVE" && <Badge variant="ghost" className={cn("ml-2", toneSoft.violet)}>Sensitive</Badge>}
+                  </TableCell>
+                  <TableCell>
+                    <SelectField
+                      size="sm"
+                      aria-label={english ? "Department calendar" : "Calendario del reparto"}
+                      value={entry.departmentVisibility}
+                      onChange={(value) => updateVisibility.mutate({ id: entry.id, departmentVisibility: value })}
+                      data={[
+                        { value: "EXACT", label: english ? "Name + exact type" : "Nome + tipo esatto" },
+                        { value: "GENERIC", label: english ? "Name + absent" : "Nome + assente" },
+                        { value: "HIDDEN", label: english ? "Hidden" : "Nascosto" },
+                      ]}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="balances" className="mt-6 flex flex-col gap-4">
+        <Card className="gap-4 p-6">
+          <PanelTitle>{english ? "Monthly balance file" : "File saldi mensile"}</PanelTitle>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FileField label={t("chooseFile")} placeholder={t("chooseFile")} accept=".csv,.xlsx,.xls" value={file} onChange={setFile} clearLabel={t("calendarClear")} />
+            <DateField label={t("cutoff")} value={cutoff} onChange={setCutoff} />
+          </div>
+          <div className="flex justify-end">
+            <Button variant="secondary" disabled={!file} loading={previewFile.isPending} onClick={() => previewFile.mutate()}>{t("importPreview")}</Button>
+          </div>
+        </Card>
+
+        {preview && <Card className="gap-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="ghost" className={toneSoft.green}>{preview.validCount} {english ? "valid" : "valide"}</Badge>
+              <Badge variant="ghost" className={preview.errorCount ? toneSoft.red : toneSoft.gray}>{preview.errorCount} {english ? "errors" : "errori"}</Badge>
+              {preview.duplicateBatchId && <Badge variant="ghost" className={toneSoft.orange}>{english ? "Duplicate" : "Duplicato"}</Badge>}
+            </div>
+            <Button disabled={preview.errorCount > 0 || Boolean(preview.duplicateBatchId)} loading={commit.isPending} onClick={() => commit.mutate()}>{english ? "Commit" : "Conferma"}</Button>
+          </div>
+          <ScrollArea className="w-full">
+            <Table className="min-w-[620px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>{t("employee")}</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead>{t("amount")}</TableHead>
+                  <TableHead>{english ? "Validation" : "Verifica"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {preview.rows.slice(0, 25).map((row) => (
+                  <TableRow key={row.rowNumber}>
+                    <TableCell>{row.rowNumber}</TableCell>
+                    <TableCell>{row.employeeNumber}</TableCell>
+                    <TableCell>{row.accountCode}</TableCell>
+                    <TableCell>{row.amount}</TableCell>
+                    <TableCell>{row.errors.join(", ") || "OK"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </Card>}
+
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card className="gap-4 p-6">
+            <PanelTitle>{english ? "Approved future absences" : "Assenze future già approvate"}</PanelTitle>
+            <FileField label={t("chooseFile")} placeholder={t("chooseFile")} accept=".csv,.xlsx,.xls" value={futureFile} onChange={(value) => { setFutureFile(value); setFutureErrors([]); }} clearLabel={t("calendarClear")} />
+            {futureErrors.length > 0 && (
+              <Alert className={cn(toneSoft.red)}>
+                <AlertTitle>{english ? "File not imported" : "File non importato"}</AlertTitle>
+                <AlertDescription className="text-current">
+                  <div className="flex flex-col gap-1">
+                    {futureErrors.slice(0, 8).map((error) => (
+                      <span key={`${error.rowNumber}-${error.code}`} className="text-sm">
+                        {english ? "Row" : "Riga"} {error.rowNumber}: {error.code}
+                        {error.conflictingRowNumber ? ` (${english ? "conflicts with row" : "in conflitto con la riga"} ${error.conflictingRowNumber})` : ""}
+                      </span>
+                    ))}
+                    {futureErrors.length > 8 && <span className="text-sm">+{futureErrors.length - 8} {english ? "more errors" : "altri errori"}</span>}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className="flex justify-end">
+              <Button variant="secondary" disabled={!futureFile} loading={importFuture.isPending} onClick={() => importFuture.mutate()}>{english ? "Import" : "Importa"}</Button>
+            </div>
+          </Card>
+
+          <Card className="gap-4 p-6">
+            <PanelTitle>{english ? "Manual adjustment" : "Rettifica manuale"}</PanelTitle>
+            <ComboboxField
+              label={t("employee")}
+              placeholder={t("employee")}
+              emptyMessage={t("noIdentityMatches")}
+              value={adjustment.employeeId || null}
+              onChange={(value) => setAdjustment({ ...adjustment, employeeId: value })}
+              data={data.data?.employees.map((entry) => ({ value: entry.id, label: entry.displayName })) ?? []}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SelectField label="Account" value={adjustment.accountCode} onChange={(value) => setAdjustment({ ...adjustment, accountCode: value })} data={["FERIE", "EX_FESTIVITA", "PERMESSO"]} />
+              <NumberField label={t("amount")} value={adjustment.amount} onChange={(value) => setAdjustment({ ...adjustment, amount: value })} />
+            </div>
+            <DateField label={t("startDate")} value={adjustment.effectiveDate} onChange={(value) => setAdjustment({ ...adjustment, effectiveDate: value })} />
+            <TextareaField label={english ? "Reason" : "Motivo"} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.currentTarget.value })} />
+            <div className="flex justify-end">
+              <Button disabled={!adjustment.employeeId || !adjustment.amount || adjustment.reason.length < 3} loading={adjust.isPending} onClick={() => adjust.mutate()}>{t("save")}</Button>
+            </div>
+          </Card>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="reconciliation" className="mt-6 flex flex-col gap-4">
+        {data.data?.reconciliation.length ? (
+          <Card className="gap-0 overflow-hidden p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{english ? "Reference" : "Riferimento"}</TableHead>
+                  <TableHead>{t("actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.data.reconciliation.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      <Badge variant="ghost" className={toneSoft[entry.status === "DISCREPANCY" ? "orange" : entry.status === "RESOLVED" || entry.status === "MATCHED" ? "green" : "gray"]}>{entry.status}</Badge>
+                    </TableCell>
+                    <TableCell>{entry.externalReference ?? "—"}</TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="ghost" disabled={entry.status === "RESOLVED"} onClick={() => setResolution({ id: entry.id, text: "" })}>{english ? "Resolve" : "Risolvi"}</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        ) : <p className="text-muted-foreground">{english ? "No reconciliation cases." : "Nessun caso di riconciliazione."}</p>}
+
+        {resolution.id && <Card className="max-w-[680px] gap-4 p-6">
+          <TextareaField label={english ? "Resolution" : "Risoluzione"} value={resolution.text} onChange={(event) => setResolution({ ...resolution, text: event.currentTarget.value })} />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setResolution({ id: "", text: "" })}>{english ? "Cancel" : "Annulla"}</Button>
+            <Button disabled={resolution.text.length < 3} loading={resolve.isPending} onClick={() => resolve.mutate()}>{t("save")}</Button>
+          </div>
+        </Card>}
+      </TabsContent>
+
+      <TabsContent value="holidays" className="mt-6 flex flex-col gap-4">
+        <Card className="gap-4 p-6">
+          <PanelTitle>{english ? "Add one-off closure" : "Aggiungi chiusura una tantum"}</PanelTitle>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <TextField label="Code" value={holiday.code} onChange={(event) => setHoliday({ ...holiday, code: event.currentTarget.value })} />
+            <TextField label="Italiano" value={holiday.labelIt} onChange={(event) => setHoliday({ ...holiday, labelIt: event.currentTarget.value })} />
+            <TextField label="English" value={holiday.labelEn} onChange={(event) => setHoliday({ ...holiday, labelEn: event.currentTarget.value })} />
+            <DateField label={t("startDate")} value={holiday.oneOffDate} onChange={(value) => setHoliday({ ...holiday, oneOffDate: value })} />
+          </div>
+          <div className="flex justify-end">
+            <Button disabled={!holiday.code.trim() || !holiday.labelIt.trim() || !holiday.labelEn.trim() || !holiday.oneOffDate} loading={saveHoliday.isPending} onClick={() => saveHoliday.mutate()}>{t("save")}</Button>
+          </div>
+        </Card>
+
+        <Card className="gap-0 overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Italiano</TableHead>
+                <TableHead>English</TableHead>
+                <TableHead>Kind</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {holidays.data?.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>{entry.code}</TableCell>
+                  <TableCell>{entry.labelIt}</TableCell>
+                  <TableCell>{entry.labelEn}</TableCell>
+                  <TableCell><Badge variant="outline">{entry.kind}</Badge></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="audit" className="mt-6">
+        <Card className="gap-0 overflow-hidden p-0">
+          <ScrollArea className="w-full">
+            <Table className="min-w-[700px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Actor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.data?.audit.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>{formatPortalDateTime(entry.createdAt, i18n.language)}</TableCell>
+                    <TableCell>{entry.action}</TableCell>
+                    <TableCell>{entry.entityType}</TableCell>
+                    <TableCell>{entry.actorSubject}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </Card>
+      </TabsContent>
     </Tabs>
-  </Stack>;
+  </div>;
 }

@@ -101,6 +101,10 @@ const resources = {
     calendarConflict: "La selezione coincide con {{type}} ({{status}}) il {{date}}.",
     calendarNextMonth: "Mese successivo",
     calendarPreviousMonth: "Mese precedente",
+    calendarNextYear: "Anno successivo",
+    calendarPreviousYear: "Anno precedente",
+    calendarClear: "Cancella la selezione",
+    close: "Chiudi",
   } },
   en: { translation: {
     appName: "Leave",
@@ -200,6 +204,10 @@ const resources = {
     calendarConflict: "The selection overlaps {{type}} ({{status}}) on {{date}}.",
     calendarNextMonth: "Next month",
     calendarPreviousMonth: "Previous month",
+    calendarNextYear: "Next year",
+    calendarPreviousYear: "Previous year",
+    calendarClear: "Clear selection",
+    close: "Close",
   } },
 };
 
