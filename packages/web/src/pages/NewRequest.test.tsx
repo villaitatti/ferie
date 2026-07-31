@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { api, type MeResponse, type PreviewResponse } from "../api";
 import i18n from "../i18n";
+import { installBrowserShims, renderWithProviders } from "../test-setup";
 import { NewRequest } from "./NewRequest";
 
 vi.mock("../api", async (importOriginal) => {
@@ -56,38 +55,14 @@ const preview: PreviewResponse = {
 
 describe("NewRequest", () => {
   beforeAll(async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
+    installBrowserShims();
     await i18n.changeLanguage("en");
   });
 
   it("loads the allocation step automatically after a complete date selection", async () => {
     vi.mocked(api).mockResolvedValue(preview);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-    render(
-      <MantineProvider>
-        <QueryClientProvider client={client}>
-          <MemoryRouter><NewRequest me={me} /></MemoryRouter>
-        </QueryClientProvider>
-      </MantineProvider>,
-    );
+    renderWithProviders(<MemoryRouter><NewRequest me={me} /></MemoryRouter>);
 
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Select dates" }));
@@ -98,15 +73,15 @@ describe("NewRequest", () => {
 
     fireEvent.click(screen.getByText("Hourly leave"));
     expect(screen.getByTestId("picker-start-date").textContent).toBe("");
-    expect(screen.queryByRole("textbox", { name: "Start time" })).toBeNull();
-    expect(screen.queryByRole("textbox", { name: "End time" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Start time" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "End time" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Select day" }));
-    expect(screen.getByRole("textbox", { name: "Start time" })).not.toBeNull();
-    expect(screen.queryByRole("textbox", { name: "End time" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Start time" })).not.toBeNull();
+    expect(screen.queryByRole("combobox", { name: "End time" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("textbox", { name: "Start time" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Start time" }));
     fireEvent.click(await screen.findByRole("option", { name: "09:00" }));
-    expect(screen.getByRole("textbox", { name: "End time" })).not.toBeNull();
+    expect(screen.getByRole("combobox", { name: "End time" })).not.toBeNull();
   });
 });

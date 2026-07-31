@@ -4,7 +4,7 @@ Internal bilingual absence-management portal for Villa I Tatti staff in Florence
 
 ## Stack
 
-- React 19, Vite, TypeScript, Mantine, TanStack Query, i18next, FullCalendar
+- React 19, Vite, TypeScript, Tailwind CSS 4, shadcn/ui on Base UI, TanStack Query, i18next, FullCalendar
 - Express, Prisma, PostgreSQL 17, Auth0 JWT validation
 - pg-boss notification queue and AWS SES
 - pnpm 10 monorepo with shared Zod contracts and domain rules
@@ -25,7 +25,40 @@ pnpm dev
 
 Open `http://localhost:5173`. Development defaults to demo authentication. The profile menu switches between staff, pre-approver, department head, HR/final approver, and IT identities, and between every synchronized employee once a directory sync has run.
 
-The Prisma CLI and the seed script read `packages/server/.env`; link it to the repository root file with `ln -s ../../.env packages/server/.env`. `DEV_DB_PORT` moves the published database port when another checkout already uses `5433`; change the port in `DATABASE_URL` to match, because neither value is derived from the other and a mismatch connects the portal to whatever still listens on the old port.
+The Prisma CLI and the seed script read `packages/server/.env`; link it to the repository root file with `ln -s ../../.env packages/server/.env`. `DEV_DB_PORT` moves the published database port when another checkout already uses `5433`; change the port in `DATABASE_URL` to match, because neither value is derived from the other and a mismatch connects the portal to whatever still listens on the old port. `PORT` moves the API when another checkout already uses `3000`, and the Vite dev proxy follows it.
+
+### Interface
+
+The interface is Tailwind CSS 4 plus [shadcn/ui](https://ui.shadcn.com) on Base UI primitives, which
+is what shadcn installs by default. `components.json` pins `"style": "base-vega"`; a `shadcn add` run
+with a different style would pull the Radix build of the same component instead. Nothing reaches for
+the browser's own form chrome: dropdowns, date pickers, file pickers, numeric fields and tooltips are
+all portal components, because native controls cannot be styled consistently and look different on
+every platform.
+
+- `src/index.css` holds the token set — the Villa I Tatti forest-green scale, plus the six status tones
+  that absence states, balances and reconciliation cases share. Components read tokens, never literal
+  colours; `src/lib/tone.ts` names the status mapping once.
+- `src/components/ui` is the generated shadcn layer. Files added by `pnpm dlx shadcn@latest add` are
+  kept as generated except where noted in a comment, so a later re-add is a readable diff. Several carry
+  local fixes, each commented in place and worth re-checking after an upgrade: `tabs` (its orientation
+  classes target `data-horizontal`, but Base UI emits `data-orientation`), `tooltip` (Base UI ships the
+  popup without `role`) and `calendar`, which needed four — its day button never attaches the focus ref
+  it creates, its navigation bar covers the caption and swallows clicks meant for it, its component
+  overrides were built inline, so every render remounted the grid and could drop a click, and its month
+  dropdown showed the raw month index because `items` was never passed to the select. `dialog`, `sheet`
+  and `spinner` replace hardcoded English accessibility text with translations, and `button` adds a
+  Mantine-style `loading` prop.
+- The local additions are the controls shadcn does not ship: `segmented-control`, `number-field`,
+  `file-field`, `date-field`, `combobox-field`, `stepper`, `form-field`, and `picker-surface`, which is
+  the dropdown-versus-sheet switch every picker uses.
+- `src/styles.css` carries only what utility classes cannot express — page and shell structure, and the
+  calendar day markers, which sit on elements react-day-picker owns.
+- Month and year navigation inside a calendar uses a Base UI select (`CalendarDropdown` in
+  `ui/calendar.tsx`); shadcn's default keeps the trigger styled but still opens the operating system's
+  own list.
+- Base UI takes a slot element through `render` rather than Radix's `asChild`, and its state
+  attributes are `data-open`/`data-closed`/`data-checked` rather than `data-state="…"`.
 
 ### Local Employee Directory
 

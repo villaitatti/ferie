@@ -1,17 +1,26 @@
-import { ActionIcon, AppShell, Avatar, Burger, Group, Menu, NavLink, Select, Text, Tooltip } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Network, Plus, Settings } from "lucide-react";
+import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Menu, Network, Plus, Settings, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { Language } from "@ferie/shared";
+
 import { api, type DevIdentity, type MeResponse } from "./api";
 import { usePortalSession } from "./auth";
 import { PageLoader } from "./components";
 import { currentDemoSubject, DEMO_SUBJECT_KEY, demoIdentityOptions, isDemoMode } from "./demo-identity";
 import { LANGUAGE_CACHE_KEY, languageCode, languageFromCode, LANGUAGE_OPTIONS, readSessionOverride, resolveLanguage, SESSION_OVERRIDE_KEY } from "./language";
 import { splitMobileNavigation } from "./mobile-navigation";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { ComboboxField } from "@/components/ui/combobox-field";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SelectField } from "@/components/ui/select-field";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
 const NewRequest = lazy(() => import("./pages/NewRequest").then((module) => ({ default: module.NewRequest })));
@@ -52,16 +61,15 @@ function PreferredLanguageSetting({ employee, available }: { employee: MeRespons
     },
   });
   return (
-    <Select
+    <SelectField
       label={t("preferredLanguage")}
       description={!available ? t("preferredLanguageUnavailable") : update.isError ? t("preferredLanguageFailed") : t("preferredLanguageHint")}
-      error={update.isError}
+      error={update.isError ? t("preferredLanguageFailed") : undefined}
       data={LANGUAGE_OPTIONS}
       value={employee.preferredLanguage}
-      onChange={(value) => { if (value) update.mutate(value as Language); }}
+      onChange={(value) => update.mutate(value as Language)}
       disabled={!available || update.isPending}
-      allowDeselect={false}
-      size="xs"
+      size="sm"
     />
   );
 }
@@ -77,46 +85,79 @@ function DemoIdentitySwitcher() {
     retry: false,
   });
   const subject = currentDemoSubject();
-  const changeIdentity = (next: string | null) => {
+  const changeIdentity = (next: string) => {
     if (!next) return;
     localStorage.setItem(DEMO_SUBJECT_KEY, next);
     void queryClient.invalidateQueries();
     navigate("/");
   };
   return (
-    <Select
+    <ComboboxField
       label={t("rolePreview")}
       data={demoIdentityOptions(identities.data?.identities, subject)}
       value={subject}
       onChange={changeIdentity}
-      searchable
-      limit={50}
-      nothingFoundMessage={t("noIdentityMatches")}
-      size="xs"
+      emptyMessage={t("noIdentityMatches")}
+      size="sm"
     />
   );
 }
 
+interface NavigationEntry {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+  badge?: number;
+}
+
+function NavBadge({ value }: { value: number }) {
+  return <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[11px] font-bold text-white">{value}</span>;
+}
+
+function SidebarNav({ entries, isActive, onNavigate }: { entries: NavigationEntry[]; isActive: (path: string) => boolean; onNavigate: (path: string) => void }) {
+  return (
+    <nav className="flex flex-col gap-1">
+      {entries.map(({ path, label, icon: Icon, badge }) => (
+        <button
+          key={path}
+          type="button"
+          onClick={() => onNavigate(path)}
+          aria-current={isActive(path) ? "page" : undefined}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors outline-none",
+            "focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            isActive(path) ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+          )}
+        >
+          <Icon className="size-[19px] shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {badge ? <NavBadge value={badge} /> : null}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 export function App() {
-  const [opened, { toggle, close }] = useDisclosure();
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = usePortalSession();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const me = useQuery({ queryKey: ["me"], queryFn: () => api<MeResponse>("/me") });
   useInterfaceLanguage(me.data?.employee);
   if (me.isLoading) return <main className="boot-loader"><PageLoader /></main>;
   if (me.isError || !me.data) {
     return (
       <main className="boot-error">
-        <Text fw={700}>{i18n.language === "en" ? "Access unavailable" : "Accesso non disponibile"}</Text>
-        <Text c="dimmed">{me.error instanceof Error ? me.error.message : i18n.language === "en" ? "Your Employee Directory identity could not be loaded." : "Impossibile caricare l'identità da Employee Directory."}</Text>
-        {isDemoMode() && <div className="boot-error-identity"><DemoIdentitySwitcher /></div>}
+        <p className="font-bold">{i18n.language === "en" ? "Access unavailable" : "Accesso non disponibile"}</p>
+        <p className="text-muted-foreground">{me.error instanceof Error ? me.error.message : i18n.language === "en" ? "Your Employee Directory identity could not be loaded." : "Impossibile caricare l'identità da Employee Directory."}</p>
+        {isDemoMode() && <div className="mt-5 max-w-[340px]"><DemoIdentitySwitcher /></div>}
       </main>
     );
   }
 
-  const navigation = [
+  const navigation: NavigationEntry[] = ([
     { path: "/", label: t("home"), icon: Gauge, show: true },
     { path: "/new", label: t("newRequest"), icon: Plus, show: true },
     { path: "/requests", label: t("requests"), icon: CalendarRange, show: true },
@@ -124,7 +165,7 @@ export function App() {
     { path: "/calendar", label: t("calendar"), icon: CalendarDays, show: true },
     { path: "/admin", label: t("administration"), icon: Settings, show: me.data.capabilities.canAdminister },
     { path: "/integrations", label: t("integrations"), icon: Network, show: me.data.capabilities.canInspectIntegrations },
-  ].filter((entry) => entry.show);
+  ] satisfies Array<NavigationEntry & { show: boolean }>).filter((entry) => entry.show);
 
   // Temporary, this tab only. The durable preference lives in Employee Directory and is changed from
   // the profile menu.
@@ -135,60 +176,148 @@ export function App() {
   };
 
   const pathIsActive = (path: string) => location.pathname === path || (path === "/requests" && location.pathname.startsWith("/requests/"));
-  const nav = navigation.map(({ path, label, icon: Icon, badge }) => (
-    <NavLink key={path} label={label} leftSection={<Icon size={19} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} active={pathIsActive(path)} onClick={() => { navigate(path); close(); }} />
-  ));
+  const go = (path: string) => { navigate(path); setDrawerOpen(false); };
   const mobileNavigation = splitMobileNavigation(navigation);
   const mobileOverflowActive = mobileNavigation.overflow.some((entry) => entry.path === location.pathname);
   const mobileOverflowBadge = mobileNavigation.overflow.reduce((sum, entry) => sum + (entry.badge ?? 0), 0);
+  const initials = me.data.employee.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2);
 
   return (
-    <AppShell header={{ height: 64 }} navbar={{ width: 244, breakpoint: "sm", collapsed: { mobile: !opened } }} padding={0}>
-      <AppShell.Header className="app-header">
-        <Group h="100%" px="md" justify="space-between">
-          <Group gap="sm"><Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" /><div className="brand-mark"><CalendarCheck2 size={21} /></div><div><Text fw={800} lh={1.1}>{t("appName")}</Text><Text size="xs" c="dimmed">Villa I Tatti</Text></div></Group>
-          <Group gap="xs">
-            <Tooltip label={t("language")}><ActionIcon variant="subtle" color="gray" onClick={() => void selectLanguage(i18n.language === "en" ? "it" : "en")} aria-label={t("language")}><Languages size={20} /></ActionIcon></Tooltip>
-            <Menu position="bottom-end" width={260}>
-              <Menu.Target><button className="profile-button"><Avatar size={34} color="forest">{me.data.employee.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</Avatar><span className="profile-copy"><strong>{me.data.employee.displayName}</strong><small>{me.data.employee.departmentName}</small></span></button></Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Label>{me.data.employee.email}</Menu.Label>
-                <Menu.Item closeMenuOnClick={false}><PreferredLanguageSetting employee={me.data.employee} available={me.data.capabilities.canChangePreferredLanguage} /></Menu.Item>
-                {isDemoMode() && <Menu.Item closeMenuOnClick={false}><DemoIdentitySwitcher /></Menu.Item>}
-                <Menu.Divider />
-                <Menu.Item leftSection={<LogOut size={16} />} onClick={signOut}>{t("signOut")}</Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          </Group>
-        </Group>
-      </AppShell.Header>
-      <AppShell.Navbar p="sm" className="desktop-nav">
-        <div className="nav-stack">{nav}</div>
-        <div className="sidebar-footer">
-          <Text size="xs" c="dimmed">37.5h · Europe/Rome</Text>
-          <Text size="xs" c="dimmed">v{__APP_VERSION__}</Text>
+    <div className="min-h-screen">
+      <header className="fixed inset-x-0 top-0 z-40 h-16 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+        <div className="flex h-full items-center justify-between gap-3 px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+              <SheetTrigger render={<Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t("more")} />}>
+                <Menu />
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 p-4">
+                <SheetHeader className="p-0">
+                  <SheetTitle>{t("appName")}</SheetTitle>
+                </SheetHeader>
+                <SidebarNav entries={navigation} isActive={pathIsActive} onNavigate={go} />
+              </SheetContent>
+            </Sheet>
+            <div className="grid size-9 shrink-0 place-items-center rounded-md bg-forest-800 text-white">
+              <CalendarCheck2 className="size-[21px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="leading-tight font-extrabold">{t("appName")}</p>
+              <p className="truncate text-xs text-muted-foreground">Villa I Tatti</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={<Button variant="ghost" size="icon" aria-label={t("language")} onClick={() => void selectLanguage(i18n.language === "en" ? "it" : "en")} />}
+              >
+                <Languages className="size-5" />
+              </TooltipTrigger>
+              <TooltipContent>{t("language")}</TooltipContent>
+            </Tooltip>
+            <Popover>
+              <PopoverTrigger
+                render={<button type="button" className="flex items-center gap-2.5 rounded-md p-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50" />}
+              >
+                  <Avatar className="size-9">
+                    <AvatarFallback className="bg-forest-100 text-sm font-semibold text-forest-800">{initials}</AvatarFallback>
+                  </Avatar>
+                  <span className="hidden max-w-[190px] flex-col sm:flex">
+                    <strong className="truncate text-sm">{me.data.employee.displayName}</strong>
+                    <small className="truncate text-xs text-muted-foreground">{me.data.employee.departmentName}</small>
+                  </span>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 p-3">
+                <p className="px-1 pb-2 text-xs text-muted-foreground">{me.data.employee.email}</p>
+                <div className="flex flex-col gap-4">
+                  <PreferredLanguageSetting employee={me.data.employee} available={me.data.capabilities.canChangePreferredLanguage} />
+                  {isDemoMode() && <DemoIdentitySwitcher />}
+                </div>
+                <Separator className="my-3" />
+                <Button variant="ghost" className="w-full justify-start gap-2" onClick={signOut}>
+                  <LogOut className="size-4" />{t("signOut")}
+                </Button>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
-      </AppShell.Navbar>
-      <AppShell.Main><main className="page"><Suspense fallback={<PageLoader />}><Routes>
-        <Route path="/" element={<Dashboard me={me.data} />} />
-        <Route path="/new" element={<NewRequest me={me.data} />} />
-        <Route path="/requests" element={<Requests />} />
-        <Route path="/requests/:id" element={<RequestDetail />} />
-        <Route path="/approvals" element={<Approvals />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/admin" element={me.data.capabilities.canAdminister ? <Admin /> : <Navigate to="/" />} />
-        <Route path="/integrations" element={me.data.capabilities.canInspectIntegrations ? <Integrations /> : <Navigate to="/" />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes></Suspense></main></AppShell.Main>
-      <nav className="mobile-nav" aria-label={i18n.language === "en" ? "Primary navigation" : "Navigazione principale"}>
-        {mobileNavigation.primary.map(({ path, label, icon: Icon, badge }) => <button key={path} className={pathIsActive(path) ? "active" : ""} onClick={() => navigate(path)}><span><Icon size={20} />{badge ? <i>{badge}</i> : null}</span><small>{label}</small></button>)}
-        {mobileNavigation.overflow.length > 0 && <Menu position="top-end" width={230} withinPortal>
-          <Menu.Target><button className={mobileOverflowActive ? "active" : ""} aria-label={t("more")}><span><Ellipsis size={22} />{mobileOverflowBadge ? <i>{mobileOverflowBadge}</i> : null}</span><small>{t("more")}</small></button></Menu.Target>
-          <Menu.Dropdown>
-            {mobileNavigation.overflow.map(({ path, label, icon: Icon, badge }) => <Menu.Item key={path} leftSection={<Icon size={18} />} rightSection={badge ? <span className="nav-badge">{badge}</span> : undefined} color={pathIsActive(path) ? "forest" : undefined} onClick={() => navigate(path)}>{label}</Menu.Item>)}
-          </Menu.Dropdown>
-        </Menu>}
+      </header>
+
+      <aside className="fixed top-16 bottom-0 left-0 z-30 hidden w-61 flex-col border-r bg-sidebar p-3 md:flex">
+        <SidebarNav entries={navigation} isActive={pathIsActive} onNavigate={go} />
+        <div className="mt-auto flex flex-col gap-0.5 border-t px-2.5 pt-3 text-xs text-muted-foreground">
+          <span>37.5h · Europe/Rome</span>
+          <span>v{__APP_VERSION__}</span>
+        </div>
+      </aside>
+
+      {/* The offsets clear the fixed header and sidebar; `.page` owns the content padding itself. */}
+      <div className="pt-16 md:pl-61">
+        <main className="page">
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Dashboard me={me.data} />} />
+              <Route path="/new" element={<NewRequest me={me.data} />} />
+              <Route path="/requests" element={<Requests />} />
+              <Route path="/requests/:id" element={<RequestDetail />} />
+              <Route path="/approvals" element={<Approvals />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/admin" element={me.data.capabilities.canAdminister ? <Admin /> : <Navigate to="/" />} />
+              <Route path="/integrations" element={me.data.capabilities.canInspectIntegrations ? <Integrations /> : <Navigate to="/" />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
+
+      <nav
+        aria-label={i18n.language === "en" ? "Primary navigation" : "Navigazione principale"}
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      >
+        {mobileNavigation.primary.map(({ path, label, icon: Icon, badge }) => (
+          <button
+            key={path}
+            type="button"
+            onClick={() => navigate(path)}
+            aria-current={pathIsActive(path) ? "page" : undefined}
+            className={cn("flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2", pathIsActive(path) ? "text-primary" : "text-muted-foreground")}
+          >
+            <span className="relative flex h-[22px] items-center">
+              <Icon className="size-5" />
+              {badge ? <span className="absolute -top-1.5 left-3.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-bold text-white">{badge}</span> : null}
+            </span>
+            <small className="w-full text-center text-[10px] leading-[1.05] break-words">{label}</small>
+          </button>
+        ))}
+        {mobileNavigation.overflow.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={t("more")}
+                  className={cn("flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2", mobileOverflowActive ? "text-primary" : "text-muted-foreground")}
+                />
+              }
+            >
+              <span className="relative flex h-[22px] items-center">
+                <Ellipsis className="size-[22px]" />
+                {mobileOverflowBadge ? <span className="absolute -top-1.5 left-3.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-bold text-white">{mobileOverflowBadge}</span> : null}
+              </span>
+              <small className="text-[10px] leading-[1.05]">{t("more")}</small>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-56">
+              {mobileNavigation.overflow.map(({ path, label, icon: Icon, badge }) => (
+                <DropdownMenuItem key={path} onSelect={() => navigate(path)} className={cn(pathIsActive(path) && "text-primary")}>
+                  <Icon className="size-[18px]" />
+                  <span className="flex-1">{label}</span>
+                  {badge ? <NavBadge value={badge} /> : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </nav>
-    </AppShell>
+    </div>
   );
 }

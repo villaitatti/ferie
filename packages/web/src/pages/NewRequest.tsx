@@ -1,57 +1,68 @@
-import { Alert, Button, Divider, Group, Loader, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Stepper, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, Send } from "lucide-react";
+import { AlertTriangleIcon, Check, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+
 import { api, type BalanceSummary, type MeResponse, type PreviewResponse, type RequestListItem } from "../api";
 import { Quantity } from "../components";
 import { RequestDatePicker } from "../components/RequestDatePicker";
 import { formatPortalDate, formatPortalDateWithWeekday, formatPortalList, permissionEndSlots, permissionStartSlots } from "../request-calendar";
+import { cn } from "@/lib/utils";
+import { toneBorder, toneSoft, toneText } from "@/lib/tone";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { NumberField } from "@/components/ui/number-field";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SelectField } from "@/components/ui/select-field";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Stepper } from "@/components/ui/stepper";
 
 type Kind = "FERIE" | "PERMESSO";
 
 interface AllocationFieldProps {
   balance?: BalanceSummary;
   fallbackLabel: string;
-  value: number | string;
-  onChange: (value: number | string) => void;
+  value: number | null;
+  onChange: (value: number | null) => void;
 }
 
 function AllocationField({ balance, fallbackLabel, value, onChange }: AllocationFieldProps) {
   const { t, i18n } = useTranslation();
-  const allocation = typeof value === "number" ? value : Number(value) || 0;
+  const allocation = value ?? 0;
   const remaining = balance?.available === null || balance?.available === undefined
     ? null
     : balance.available - allocation;
   const label = balance ? (i18n.language === "en" ? balance.labelEn : balance.labelIt) : fallbackLabel;
 
   return <div className="allocation-field">
-    <Group justify="space-between" align="baseline" gap="xs" wrap="wrap">
-      <Text fw={700}>{label}</Text>
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <p className="font-bold">{label}</p>
       {balance?.available === null || balance?.available === undefined
-        ? <Text size="sm" c="orange" fw={600}>{t("noBalance")}</Text>
-        : <Text size="sm" c={balance.stale ? "orange" : "green.8"} fw={700}>{t("available")}: <Quantity amount={balance.available} unit={balance.unit} /></Text>}
-    </Group>
-    <NumberInput
-      mt="sm"
+        ? <p className={cn("text-sm font-semibold", toneText.orange)}>{t("noBalance")}</p>
+        : <p className={cn("text-sm font-bold", balance.stale ? toneText.orange : toneText.green)}>{t("available")}: <Quantity amount={balance.available} unit={balance.unit} /></p>}
+    </div>
+    <NumberField
+      className="mt-3"
       min={0}
       decimalScale={2}
       label={t("daysToUse")}
       value={value}
       onChange={onChange}
-      suffix={i18n.language === "en" ? " d" : " gg"}
+      suffix={i18n.language === "en" ? "d" : "gg"}
     />
-    <Group justify="space-between" gap="xs" mt={8} wrap="wrap">
-      {balance && <Text size="xs" c="dimmed">{t("pending")}: <strong><Quantity amount={balance.pending} unit={balance.unit} /></strong></Text>}
-      {remaining !== null && <Text size="xs" c={remaining < 0 ? "red" : "dimmed"}>{t("afterRequest")}: <strong><Quantity amount={remaining} unit={balance?.unit ?? "DAYS"} /></strong></Text>}
-    </Group>
-    {balance && <Text size="xs" c={balance.stale ? "orange" : "dimmed"} mt={6}>
+    <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs">
+      {balance && <span className="text-muted-foreground">{t("pending")}: <strong className="font-semibold"><Quantity amount={balance.pending} unit={balance.unit} /></strong></span>}
+      {remaining !== null && <span className={remaining < 0 ? toneText.red : "text-muted-foreground"}>{t("afterRequest")}: <strong className="font-semibold"><Quantity amount={remaining} unit={balance?.unit ?? "DAYS"} /></strong></span>}
+    </div>
+    {balance && <p className={cn("mt-1.5 text-xs", balance.stale ? toneText.orange : "text-muted-foreground")}>
       {balance.asOf
         ? `${balance.stale ? `${t("stale")} · ` : ""}${t("asOf")} ${formatPortalDate(balance.asOf, i18n.language)}`
         : balance.stale ? t("stale") : t("noBalance")}
-    </Text>}
+    </p>}
   </div>;
 }
 
@@ -66,8 +77,8 @@ export function NewRequest({ me }: { me: MeResponse }) {
   const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [ferie, setFerie] = useState<number | string>(0);
-  const [exFestivita, setExFestivita] = useState<number | string>(0);
+  const [ferie, setFerie] = useState<number | null>(0);
+  const [exFestivita, setExFestivita] = useState<number | null>(0);
   const requests = useQuery({ queryKey: ["requests"], queryFn: () => api<RequestListItem[]>("/requests"), enabled: Boolean(revisionOfId) });
   useEffect(() => {
     const source = requests.data?.find((entry) => entry.id === revisionOfId);
@@ -151,57 +162,85 @@ export function NewRequest({ me }: { me: MeResponse }) {
     if (endTime && !endTimeOptions.includes(endTime)) setEndTime("");
   }, [kind, startTime, endTime, startTimeOptions, endTimeOptions]);
 
-  return <Stack gap="xl" maw={840} className="request-form">
-    <Title order={1} className="request-page-heading">{t("newRequest")}</Title>
-    <Stepper active={preview ? 1 : 0} size="sm" className="request-stepper"><Stepper.Step label={i18n.language === "en" ? "Dates" : "Date"} /><Stepper.Step label={t("allocation")} /><Stepper.Step label={i18n.language === "en" ? "Confirmation" : "Conferma"} /></Stepper>
-    <Paper withBorder p={{ base: "md", sm: "xl" }} className="tool-panel request-form-panel">
-      <Stack gap="xl" className="request-form-fields">
-        <SegmentedControl fullWidth value={kind} onChange={(value) => changeKind(value as Kind)} data={[{ value: "FERIE", label: t("annualLeave") }, { value: "PERMESSO", label: t("hourlyLeave") }]} />
-        <RequestDatePicker key={kind} kind={kind} startDate={startDate} endDate={endDate} schedule={me.employee.schedule} revisionOfId={revisionOfId} onChange={setRequestDates} />
-        {kind === "PERMESSO" && startDate && <Stack gap="md">
-          <Select
-            label={t("startTime")}
-            placeholder={t("chooseTime")}
-            data={startTimeOptions}
-            value={startTime || null}
-            onChange={(value) => {
-              setStartTime(value ?? "");
-              setEndTime("");
-            }}
-            allowDeselect={false}
-            searchable={false}
-          />
-          {startTime && <Select
-            label={t("endTime")}
-            placeholder={t("chooseTime")}
-            data={endTimeOptions}
-            value={endTime || null}
-            onChange={(value) => setEndTime(value ?? "")}
-            allowDeselect={false}
-            searchable={false}
-          />}
-        </Stack>}
-        {previewQuery.isFetching && <Group gap="xs" c="dimmed"><Loader size="sm" /><Text size="sm">{t("calculatingRequest")}</Text></Group>}
-        {previewQuery.isError && <Alert color="red" icon={<AlertTriangle size={17} />}>{previewQuery.error.message}</Alert>}
-      </Stack>
-    </Paper>
-    {preview && <Paper withBorder p={{ base: "md", sm: "xl" }} className="tool-panel request-preview-panel"><Stack gap="md">
-      <Group justify="space-between"><Text fw={700}>{t("deductible")}</Text><Text size="xl" fw={800}><Quantity amount={preview.quantity} unit={preview.unit} /></Text></Group>
-      {excludedDates.length > 0 && <Text size="sm" c="dimmed">{t("excluded")}: {formatPortalList(excludedDates, i18n.language)}</Text>}
+  return <div className="flex max-w-[840px] flex-col gap-8">
+    <h1 className="request-page-heading text-[clamp(1.65rem,2.5vw,2.15rem)] font-bold">{t("newRequest")}</h1>
+    <Stepper
+      active={preview ? 1 : 0}
+      steps={[
+        i18n.language === "en" ? "Dates" : "Date",
+        t("allocation"),
+        i18n.language === "en" ? "Confirmation" : "Conferma",
+      ]}
+    />
+
+    <Card className="request-form-panel gap-8 p-4 sm:p-8">
+      <SegmentedControl
+        fullWidth
+        value={kind}
+        onChange={(value) => changeKind(value as Kind)}
+        aria-label={t("type")}
+        data={[{ value: "FERIE", label: t("annualLeave") }, { value: "PERMESSO", label: t("hourlyLeave") }]}
+      />
+      <RequestDatePicker key={kind} kind={kind} startDate={startDate} endDate={endDate} schedule={me.employee.schedule} revisionOfId={revisionOfId} onChange={setRequestDates} />
+      {kind === "PERMESSO" && startDate && <div className="flex flex-col gap-4 sm:max-w-sm">
+        <SelectField
+          label={t("startTime")}
+          placeholder={t("chooseTime")}
+          data={startTimeOptions}
+          value={startTime || null}
+          onChange={(value) => { setStartTime(value); setEndTime(""); }}
+        />
+        {startTime && <SelectField
+          label={t("endTime")}
+          placeholder={t("chooseTime")}
+          data={endTimeOptions}
+          value={endTime || null}
+          onChange={setEndTime}
+        />}
+      </div>}
+      {previewQuery.isFetching && <div className="flex items-center gap-2 text-muted-foreground"><Spinner />{t("calculatingRequest")}</div>}
+      {previewQuery.isError && (
+        <Alert className={cn(toneSoft.red, toneBorder.red)}>
+          <AlertTriangleIcon />
+          <AlertDescription className="text-current">{previewQuery.error.message}</AlertDescription>
+        </Alert>
+      )}
+    </Card>
+
+    {preview && <Card className="request-preview-panel gap-4 p-4 sm:p-8">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-bold">{t("deductible")}</p>
+        <p className="text-xl font-extrabold"><Quantity amount={preview.quantity} unit={preview.unit} /></p>
+      </div>
+      {excludedDates.length > 0 && <p className="text-sm text-muted-foreground">{t("excluded")}: {formatPortalList(excludedDates, i18n.language)}</p>}
       {kind === "FERIE" && <>
-        <Divider />
-        <Group justify="space-between" align="baseline" gap="xs" wrap="wrap">
-          <Text fw={700}>{t("allocation")}</Text>
-          <Text size="sm" c="dimmed">{t("toAllocate")}: <strong><Quantity amount={preview.quantity} unit={preview.unit} /></strong></Text>
-        </Group>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={0} className="allocation-grid">
+        <Separator />
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="font-bold">{t("allocation")}</p>
+          <p className="text-sm text-muted-foreground">{t("toAllocate")}: <strong className="font-semibold"><Quantity amount={preview.quantity} unit={preview.unit} /></strong></p>
+        </div>
+        <div className="allocation-grid grid sm:grid-cols-2">
           <AllocationField balance={ferieBalance} fallbackLabel={t("annualLeave")} value={ferie} onChange={setFerie} />
           <AllocationField balance={exFestivitaBalance} fallbackLabel={i18n.language === "en" ? "Former public holidays" : "Ex festività"} value={exFestivita} onChange={setExFestivita} />
-        </SimpleGrid>
-        {!allocationValid && <Text size="sm" c="red">{i18n.language === "en" ? "The allocation must equal the deductible days." : "La ripartizione deve corrispondere ai giorni da scalare."}</Text>}
+        </div>
+        {!allocationValid && <p className={cn("text-sm", toneText.red)}>{i18n.language === "en" ? "The allocation must equal the deductible days." : "La ripartizione deve corrispondere ai giorni da scalare."}</p>}
       </>}
-      {preview.overBalance && <Alert color="orange" icon={<AlertTriangle size={18} />}>{t("warningOver")}</Alert>}
-      <Divider /><Group justify="space-between"><Group gap="xs"><Check size={18} color="var(--mantine-color-green-7)" /><Text size="sm">{i18n.language === "en" ? "Dates and schedule validated" : "Date e orario verificati"}</Text></Group><Button leftSection={<Send size={17} />} disabled={!allocationValid} loading={submit.isPending} onClick={() => submit.mutate()}>{t("submit")}</Button></Group>
-    </Stack></Paper>}
-  </Stack>;
+      {preview.overBalance && (
+        <Alert className={cn(toneSoft.orange, toneBorder.orange)}>
+          <AlertTriangleIcon />
+          <AlertDescription className="text-current">{t("warningOver")}</AlertDescription>
+        </Alert>
+      )}
+      <Separator />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="flex items-center gap-2 text-sm">
+          <Check className={cn("size-[18px]", toneText.green)} />
+          {i18n.language === "en" ? "Dates and schedule validated" : "Date e orario verificati"}
+        </span>
+        <Button disabled={!allocationValid || submit.isPending} onClick={() => submit.mutate()}>
+          {submit.isPending ? <Spinner /> : <Send className="size-[17px]" />}{t("submit")}
+        </Button>
+      </div>
+    </Card>}
+  </div>;
 }
