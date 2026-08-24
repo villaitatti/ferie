@@ -128,8 +128,10 @@ interface NavigationEntry {
   badge?: number;
 }
 
+// Dark text on the dark theme: the lifted destructive red only reaches ~3.6:1 against white,
+// short of the 4.5:1 these small counters need (same treatment as toneSolid in lib/tone.ts).
 function NavBadge({ value }: { value: number }) {
-  return <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[11px] font-bold text-white">{value}</span>;
+  return <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[11px] font-bold text-white dark:text-neutral-950">{value}</span>;
 }
 
 function BrandMark() {
@@ -352,7 +354,7 @@ function AppShell() {
           >
             <span className="relative flex h-[22px] items-center">
               <Icon className="size-5" />
-              {badge ? <span className="absolute -top-1.5 left-3.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-bold text-white">{badge}</span> : null}
+              {badge ? <span className="absolute -top-1.5 left-3.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-bold text-white dark:text-neutral-950">{badge}</span> : null}
             </span>
             <small className="w-full text-center text-[10px] leading-[1.05] break-words">{label}</small>
           </button>
@@ -370,7 +372,7 @@ function AppShell() {
             >
               <span className="relative flex h-[22px] items-center">
                 <Ellipsis className="size-[22px]" />
-                {mobileOverflowBadge ? <span className="absolute -top-1.5 left-3.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-bold text-white">{mobileOverflowBadge}</span> : null}
+                {mobileOverflowBadge ? <span className="absolute -top-1.5 left-3.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-bold text-white dark:text-neutral-950">{mobileOverflowBadge}</span> : null}
               </span>
               <small className="text-[10px] leading-[1.05]">{t("more")}</small>
             </DropdownMenuTrigger>

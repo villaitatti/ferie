@@ -23,6 +23,13 @@ FROM build AS production-dependencies
 # Prisma 7's generated client lives in src/generated and is bundled into dist by tsup; only the
 # @prisma/client runtime (a prod dependency) is needed at runtime, so no engine or .prisma copying.
 RUN pnpm --filter @ferie/server deploy --prod --legacy /prod/server
+# `pnpm deploy --prod` still materializes @prisma/client's optional peers — the prisma CLI, its
+# engines, and typescript — which the runtime never uses; pruning them halves node_modules.
+RUN find /prod/server/node_modules -type l \( -name prisma -o -name typescript \) -delete \
+    && find /prod/server/node_modules -path '*/node_modules/.bin/prisma' -delete \
+    && find /prod/server/node_modules -path '*/node_modules/.bin/tsc' -delete \
+    && find /prod/server/node_modules -path '*/node_modules/.bin/tsserver' -delete \
+    && find /prod/server/node_modules/.pnpm -maxdepth 1 -type d \( -name 'prisma@*' -o -name 'typescript@*' -o -name '@prisma+engines*' \) -exec rm -rf {} +
 
 FROM build AS migration
 ENV NODE_ENV=production

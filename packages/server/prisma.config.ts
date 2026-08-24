@@ -11,9 +11,11 @@ loadDotenv(existsSync(rootEnv) ? { path: rootEnv, quiet: true } : { quiet: true 
 
 // Prisma's env() helper throws while the config is being loaded, which breaks commands that never
 // touch the database (`prisma generate` in CI, builds on a fresh clone with no .env). Resolve the
-// URL ourselves instead: commands that do connect will still fail loudly if the fallback points
-// nowhere.
-const databaseUrl = process.env.DATABASE_URL ?? "postgresql://ferie:ferie@localhost:5433/ferie";
+// URL ourselves instead — but never fall back to a real port: parallel checkouts share localhost,
+// and a silent default could migrate or seed another workspace's database. The .invalid hostname
+// keeps `generate` working (it never connects) while any database-touching command fails loudly
+// with this string in the error.
+const databaseUrl = process.env.DATABASE_URL ?? "postgresql://ferie@set-database-url-in-root-dot-env.invalid:5432/ferie";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
