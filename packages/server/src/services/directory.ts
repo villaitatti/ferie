@@ -9,17 +9,17 @@ const employeeSchema = z.object({
   id: z.string(),
   employeeNumber: z.string(),
   auth0Subject: z.string(),
-  workEmail: z.string().email(),
+  workEmail: z.email(),
   displayName: z.string(),
   title: z.string().nullable(),
-  department: z.object({ id: z.string(), name: z.string(), updatedAt: z.string().datetime() }),
+  department: z.object({ id: z.string(), name: z.string(), updatedAt: z.iso.datetime() }),
   status: z.enum(["ACTIVE", "INACTIVE"]),
   fte: z.number().positive(),
   schedule: z.array(z.object({ weekday: z.number().int().min(1).max(7), start: z.string(), end: z.string() })),
   roles: z.array(z.enum(["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN", "STAFF_IT"])),
   preferredLanguage: z.enum(LANGUAGES),
   approvers: z.array(z.object({ employeeSourceId: z.string(), role: z.enum(["PRE_APPROVER", "RESPONSABILE", "SUBSTITUTE_RESPONSABILE"]) })),
-  updatedAt: z.string().datetime(),
+  updatedAt: z.iso.datetime(),
 });
 
 const pageSchema = z.object({ items: z.array(employeeSchema), nextCursor: z.string().nullable().optional() });

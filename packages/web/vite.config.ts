@@ -32,21 +32,17 @@ export default defineConfig(({ mode }) => {
       outDir: "dist",
       rollupOptions: {
         output: {
-          // Matched by path rather than the object form: the object form only catches a package's
-          // entry module, so react-dom's real code (`react-dom/client`) landed in the app chunk and
-          // was re-downloaded on every deploy instead of staying cached with the other primitives.
-          manualChunks(id: string) {
-            const chunks: Record<string, string[]> = {
-              react: ["react", "react-dom", "scheduler", "react-router", "react-router-dom"],
-              baseui: ["@base-ui/react"],
-              calendar: ["react-day-picker", "date-fns"],
-              data: ["@tanstack/react-query", "i18next", "react-i18next"],
-              auth: ["@auth0/auth0-react"],
-            };
-            for (const [chunk, packages] of Object.entries(chunks)) {
-              if (packages.some((name) => id.includes(`/node_modules/${name}/`))) return chunk;
-            }
-            return undefined;
+          // Rolldown (Vite 8) replaces manualChunks with codeSplitting groups. Matched by path for
+          // the same reason the old function matched by path: an entry-module match would leave
+          // react-dom's real code (`react-dom/client`) in the app chunk, re-downloaded per deploy.
+          codeSplitting: {
+            groups: [
+              { name: "react", test: /node_modules\/(react|react-dom|scheduler|react-router|react-router-dom)\// },
+              { name: "baseui", test: /node_modules\/@base-ui\// },
+              { name: "calendar", test: /node_modules\/(react-day-picker|date-fns)\// },
+              { name: "data", test: /node_modules\/(@tanstack|i18next|react-i18next)\// },
+              { name: "auth", test: /node_modules\/@auth0\// },
+            ],
           },
         },
       },

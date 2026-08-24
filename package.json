@@ -1,6 +1,6 @@
 {
   "name": "itatti-ferie-portal",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,15 +10,19 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "lint": "biome lint .",
     "db:generate": "pnpm --filter @ferie/server db:generate",
     "db:migrate": "pnpm --filter @ferie/server db:migrate",
     "db:deploy": "pnpm --filter @ferie/server db:deploy",
     "db:seed": "pnpm --filter @ferie/server db:seed",
     "dev:db": "docker compose -f docker-compose.dev.yml up -d",
-    "dev:setup": "pnpm install && pnpm dev:db && pnpm db:deploy && pnpm db:seed"
+    "dev:setup": "pnpm install && pnpm db:generate && pnpm dev:db && pnpm db:deploy && pnpm db:seed"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.9"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "packageManager": "pnpm@10.32.1",
   "pnpm": {

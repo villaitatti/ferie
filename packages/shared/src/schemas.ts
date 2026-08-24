@@ -27,8 +27,8 @@ export const requestCalendarRangeSchema = z.object({
     return;
   }
   const days = end.since(start).days;
-  if (days < 0) context.addIssue({ code: z.ZodIssueCode.custom, message: "End date must not precede start date", path: ["to"] });
-  if (days > 3_660) context.addIssue({ code: z.ZodIssueCode.custom, message: "Calendar range cannot exceed 3660 days", path: ["to"] });
+  if (days < 0) context.addIssue({ code: "custom", message: "End date must not precede start date", path: ["to"] });
+  if (days > 3_660) context.addIssue({ code: "custom", message: "Calendar range cannot exceed 3660 days", path: ["to"] });
 });
 
 export const vacationPreviewSchema = z.object({
@@ -85,7 +85,7 @@ export const holidayRuleUpsertSchema = z.discriminatedUnion("recurrence", [
   try {
     Temporal.PlainDate.from({ year: 2025, month: input.month, day: input.day }, { overflow: "reject" });
   } catch {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Expected a valid annual month and day", path: ["day"] });
+    context.addIssue({ code: "custom", message: "Expected a valid annual month and day", path: ["day"] });
   }
 });
 
