@@ -1,5 +1,14 @@
-import "dotenv/config";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
+
+// Same root-.env convention as prisma.config.ts: the dev server starts with packages/server as the
+// working directory, so a bare `dotenv/config` would miss the repository-root .env and every value
+// would silently fall back to its default. Real environment variables always win (dotenv never
+// overrides), so containers and CI are unaffected; in production the file simply does not exist.
+const rootEnv = resolve(import.meta.dirname, "../../../.env");
+loadDotenv(existsSync(rootEnv) ? { path: rootEnv, quiet: true } : { quiet: true });
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
