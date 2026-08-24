@@ -76,6 +76,75 @@
   --tone-violet-soft: oklch(96% 0.022 305);
   --tone-gray: oklch(46.69% 0.0216 165.58);
   --tone-gray-soft: oklch(95.63% 0.0025 165.07);
+
+  /* Institutional crimson, used only by the I Tatti logo mark (shared with Libra). */
+  --itatti-crimson: oklch(48% 0.19 21.3);
+}
+
+/*
+ * Dark counterparts, applied by the `.dark` class that lib/theme.tsx toggles on <html> (and that
+ * public/theme-init.js applies before first paint). The neutrals keep the same faint forest cast as
+ * the light theme; the tone text colours are lifted for contrast on the dark soft fills.
+ *
+ * The forest brand scale is deliberately NOT remapped: its steps are absolute (50 = lightest), so a
+ * `bg-forest-800` mark stays dark green in both themes. The few places that pair light forest steps
+ * with dark forest text carry explicit `dark:` classes instead (lib/tone.ts, the header avatar).
+ */
+.dark {
+  color-scheme: dark;
+
+  --background: oklch(18.5% 0.008 168);
+  --foreground: oklch(92.5% 0.005 165);
+  --card: oklch(22.5% 0.01 168);
+  --card-foreground: oklch(92.5% 0.005 165);
+  --popover: oklch(23.5% 0.01 168);
+  --popover-foreground: oklch(92.5% 0.005 165);
+  --primary: oklch(72% 0.0857 167.14);
+  --primary-foreground: oklch(20% 0.03 170);
+  --secondary: oklch(28% 0.018 168);
+  --secondary-foreground: oklch(87% 0.035 166);
+  --muted: oklch(26.5% 0.008 168);
+  --muted-foreground: oklch(69% 0.012 165);
+  --accent: oklch(28% 0.018 168);
+  --accent-foreground: oklch(87% 0.035 166);
+  --destructive: oklch(64% 0.17 26);
+  --destructive-foreground: oklch(98.5% 0.002 145);
+  --border: oklch(100% 0 0 / 12%);
+  --input: oklch(100% 0 0 / 16%);
+  --ring: oklch(65% 0.075 167);
+
+  --sidebar: oklch(20.5% 0.01 168);
+  --sidebar-foreground: oklch(92.5% 0.005 165);
+  --sidebar-primary: oklch(72% 0.0857 167.14);
+  --sidebar-primary-foreground: oklch(20% 0.03 170);
+  --sidebar-accent: oklch(28.5% 0.02 168);
+  --sidebar-accent-foreground: oklch(90% 0.03 166);
+  --sidebar-border: oklch(100% 0 0 / 10%);
+  --sidebar-ring: oklch(65% 0.075 167);
+
+  --chart-1: oklch(72% 0.0857 167.14);
+  --chart-2: oklch(75% 0.115 55.42);
+  --chart-3: oklch(70% 0.09 249.7);
+  --chart-4: oklch(72% 0.12 306.21);
+  --chart-5: oklch(80% 0.14 80.19);
+
+  --tone-green: oklch(74% 0.1 159.65);
+  --tone-green-soft: oklch(28% 0.03 162);
+  --tone-yellow: oklch(80% 0.11 85);
+  --tone-yellow-soft: oklch(29% 0.045 90);
+  --tone-orange: oklch(76% 0.12 55);
+  --tone-orange-soft: oklch(28.5% 0.04 55);
+  --tone-red: oklch(72% 0.14 25);
+  --tone-red-soft: oklch(28% 0.045 25);
+  --tone-blue: oklch(74% 0.1 244.2);
+  --tone-blue-soft: oklch(28% 0.04 244);
+  --tone-violet: oklch(75% 0.11 306.21);
+  --tone-violet-soft: oklch(28.5% 0.045 306);
+  --tone-gray: oklch(72% 0.012 165);
+  --tone-gray-soft: oklch(27% 0.008 168);
+
+  /* Lifted just enough to clear the dark surface without washing the brand colour out. */
+  --itatti-crimson: oklch(55% 0.2 21.3);
 }
 
 @theme inline {

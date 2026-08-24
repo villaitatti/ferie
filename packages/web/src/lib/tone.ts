@@ -16,7 +16,9 @@ export const toneSoft: Record<Tone, string> = {
   blue: "bg-tone-blue-soft text-tone-blue",
   violet: "bg-tone-violet-soft text-tone-violet",
   gray: "bg-tone-gray-soft text-tone-gray",
-  primary: "bg-forest-50 text-forest-800",
+  // The forest scale is absolute (it is not remapped in dark mode, see index.css), so the primary
+  // pairing flips its steps explicitly.
+  primary: "bg-forest-50 text-forest-800 dark:bg-forest-900 dark:text-forest-200",
 };
 
 /** `toneSoft` for a control: same fill, with a hover step that stays inside the tone. */
@@ -28,17 +30,21 @@ export const toneSoftButton: Record<Tone, string> = {
   blue: "bg-tone-blue-soft text-tone-blue hover:bg-tone-blue/15",
   violet: "bg-tone-violet-soft text-tone-violet hover:bg-tone-violet/15",
   gray: "bg-tone-gray-soft text-tone-gray hover:bg-tone-gray/15",
-  primary: "bg-forest-50 text-forest-800 hover:bg-forest-100",
+  primary: "bg-forest-50 text-forest-800 hover:bg-forest-100 dark:bg-forest-900 dark:text-forest-200 dark:hover:bg-forest-800",
 };
 
+/*
+ * In dark mode the tone colours are lifted for legibility (they double as text colours on the soft
+ * fills), so a solid fill needs dark text instead of white to keep its contrast.
+ */
 export const toneSolid: Record<Tone, string> = {
-  green: "bg-tone-green text-white hover:bg-tone-green/90",
-  yellow: "bg-tone-yellow text-white hover:bg-tone-yellow/90",
-  orange: "bg-tone-orange text-white hover:bg-tone-orange/90",
-  red: "bg-tone-red text-white hover:bg-tone-red/90",
-  blue: "bg-tone-blue text-white hover:bg-tone-blue/90",
-  violet: "bg-tone-violet text-white hover:bg-tone-violet/90",
-  gray: "bg-tone-gray text-white hover:bg-tone-gray/90",
+  green: "bg-tone-green text-white hover:bg-tone-green/90 dark:text-neutral-900",
+  yellow: "bg-tone-yellow text-white hover:bg-tone-yellow/90 dark:text-neutral-900",
+  orange: "bg-tone-orange text-white hover:bg-tone-orange/90 dark:text-neutral-900",
+  red: "bg-tone-red text-white hover:bg-tone-red/90 dark:text-neutral-900",
+  blue: "bg-tone-blue text-white hover:bg-tone-blue/90 dark:text-neutral-900",
+  violet: "bg-tone-violet text-white hover:bg-tone-violet/90 dark:text-neutral-900",
+  gray: "bg-tone-gray text-white hover:bg-tone-gray/90 dark:text-neutral-900",
   primary: "bg-primary text-primary-foreground hover:bg-primary/90",
 };
 

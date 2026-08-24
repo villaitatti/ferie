@@ -105,6 +105,9 @@ const resources = {
     calendarPreviousYear: "Anno precedente",
     calendarClear: "Cancella la selezione",
     close: "Chiudi",
+    toggleTheme: "Cambia tema",
+    toggleSidebar: "Mostra o nascondi il menu",
+    mainNavigation: "Navigazione principale",
   } },
   en: { translation: {
     appName: "Leave",
@@ -208,6 +211,9 @@ const resources = {
     calendarPreviousYear: "Previous year",
     calendarClear: "Clear selection",
     close: "Close",
+    toggleTheme: "Toggle theme",
+    toggleSidebar: "Show or hide the menu",
+    mainNavigation: "Primary navigation",
   } },
 };
 

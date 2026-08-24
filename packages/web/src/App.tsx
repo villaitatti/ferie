@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Menu, Network, Plus, Settings, type LucideIcon } from "lucide-react";
+import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Moon, Network, Plus, Settings, Sun, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import type { Language } from "@ferie/shared";
 
 import { api, type DevIdentity, type MeResponse } from "./api";
@@ -12,6 +12,8 @@ import { currentDemoSubject, DEMO_SUBJECT_KEY, demoIdentityOptions, isDemoMode }
 import { LANGUAGE_CACHE_KEY, languageCode, languageFromCode, LANGUAGE_OPTIONS, readSessionOverride, resolveLanguage, SESSION_OVERRIDE_KEY } from "./language";
 import { splitMobileNavigation } from "./mobile-navigation";
 import { cn } from "@/lib/utils";
+import { ThemeProvider, useTheme } from "@/lib/theme";
+import { ItattiLogo } from "@/components/ItattiLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ComboboxField } from "@/components/ui/combobox-field";
@@ -19,7 +21,23 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select-field";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
@@ -114,36 +132,95 @@ function NavBadge({ value }: { value: number }) {
   return <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[11px] font-bold text-white">{value}</span>;
 }
 
-function SidebarNav({ entries, isActive, onNavigate }: { entries: NavigationEntry[]; isActive: (path: string) => boolean; onNavigate: (path: string) => void }) {
+function BrandMark() {
   return (
-    <nav className="flex flex-col gap-1">
-      {entries.map(({ path, label, icon: Icon, badge }) => (
-        <button
-          key={path}
-          type="button"
-          onClick={() => onNavigate(path)}
-          aria-current={isActive(path) ? "page" : undefined}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors outline-none",
-            "focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            isActive(path) ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-          )}
-        >
-          <Icon className="size-[19px] shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {badge ? <NavBadge value={badge} /> : null}
-        </button>
-      ))}
-    </nav>
+    <div className="grid size-9 shrink-0 place-items-center rounded-md bg-forest-800 text-white">
+      <CalendarCheck2 className="size-[21px]" />
+    </div>
   );
 }
 
-export function App() {
+function ThemeToggle() {
+  const { t } = useTranslation();
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Button variant="ghost" size="icon" aria-label={t("toggleTheme")} onClick={toggleTheme} />}>
+        {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
+      </TooltipTrigger>
+      <TooltipContent>{t("toggleTheme")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function AppSidebar({ entries, isActive, onNavigate }: { entries: NavigationEntry[]; isActive: (path: string) => boolean; onNavigate: (path: string) => void }) {
+  const { t } = useTranslation();
+  const { isMobile, setOpenMobile } = useSidebar();
+  // Selecting a destination should also dismiss the mobile drawer.
+  const go = (path: string) => {
+    onNavigate(path);
+    if (isMobile) setOpenMobile(false);
+  };
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" tooltip={t("appName")} onClick={() => go("/")}>
+              <span className="grid size-8 shrink-0 place-items-center rounded-md bg-forest-800 text-white group-data-[collapsible=icon]:size-7">
+                <CalendarCheck2 className="size-[18px]" />
+              </span>
+              <span className="grid flex-1 text-left leading-tight">
+                <span className="truncate text-base font-extrabold tracking-tight">{t("appName")}</span>
+                <span className="truncate text-xs font-medium text-sidebar-foreground/60">Villa I Tatti</span>
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent>
+        {/* The bottom tab bar is the only other primary-navigation landmark and it is hidden on
+            desktop, so the sidebar menu carries its own <nav> region for screen readers. */}
+        <nav aria-label={t("mainNavigation")}>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {entries.map(({ path, label, icon: Icon, badge }) => (
+                  <SidebarMenuItem key={path}>
+                    <SidebarMenuButton
+                      isActive={isActive(path)}
+                      tooltip={label}
+                      aria-current={isActive(path) ? "page" : undefined}
+                      onClick={() => go(path)}
+                      className={badge ? "pr-8" : undefined}
+                    >
+                      <Icon aria-hidden />
+                      <span>{label}</span>
+                    </SidebarMenuButton>
+                    {badge ? <SidebarMenuBadge><NavBadge value={badge} /></SidebarMenuBadge> : null}
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </nav>
+      </SidebarContent>
+      <SidebarFooter>
+        <div className="flex flex-col gap-0.5 border-t px-2 pt-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+          <span>37.5h · Europe/Rome</span>
+          <span>v{__APP_VERSION__}</span>
+        </div>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
+  );
+}
+
+function AppShell() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = usePortalSession();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const me = useQuery({ queryKey: ["me"], queryFn: () => api<MeResponse>("/me") });
   useInterfaceLanguage(me.data?.employee);
   if (me.isLoading) return <main className="boot-loader"><PageLoader /></main>;
@@ -176,84 +253,75 @@ export function App() {
   };
 
   const pathIsActive = (path: string) => location.pathname === path || (path === "/requests" && location.pathname.startsWith("/requests/"));
-  const go = (path: string) => { navigate(path); setDrawerOpen(false); };
   const mobileNavigation = splitMobileNavigation(navigation);
   const mobileOverflowActive = mobileNavigation.overflow.some((entry) => entry.path === location.pathname);
   const mobileOverflowBadge = mobileNavigation.overflow.reduce((sum, entry) => sum + (entry.badge ?? 0), 0);
   const initials = me.data.employee.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2);
 
   return (
-    <div className="min-h-screen">
-      <header className="fixed inset-x-0 top-0 z-40 h-16 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <div className="flex h-full items-center justify-between gap-3 px-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-              <SheetTrigger render={<Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t("more")} />}>
-                <Menu />
-              </SheetTrigger>
-              <SheetContent side="left" className="w-72 p-4">
-                <SheetHeader className="p-0">
-                  <SheetTitle>{t("appName")}</SheetTitle>
-                </SheetHeader>
-                <SidebarNav entries={navigation} isActive={pathIsActive} onNavigate={go} />
-              </SheetContent>
-            </Sheet>
-            <div className="grid size-9 shrink-0 place-items-center rounded-md bg-forest-800 text-white">
-              <CalendarCheck2 className="size-[21px]" />
-            </div>
-            <div className="min-w-0">
-              <p className="leading-tight font-extrabold">{t("appName")}</p>
-              <p className="truncate text-xs text-muted-foreground">Villa I Tatti</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger
-                render={<Button variant="ghost" size="icon" aria-label={t("language")} onClick={() => void selectLanguage(i18n.language === "en" ? "it" : "en")} />}
-              >
-                <Languages className="size-5" />
-              </TooltipTrigger>
-              <TooltipContent>{t("language")}</TooltipContent>
-            </Tooltip>
-            <Popover>
-              <PopoverTrigger
-                render={<button type="button" className="flex items-center gap-2.5 rounded-md p-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50" />}
-              >
-                  <Avatar className="size-9">
-                    <AvatarFallback className="bg-forest-100 text-sm font-semibold text-forest-800">{initials}</AvatarFallback>
-                  </Avatar>
-                  <span className="hidden max-w-[190px] flex-col sm:flex">
-                    <strong className="truncate text-sm">{me.data.employee.displayName}</strong>
-                    <small className="truncate text-xs text-muted-foreground">{me.data.employee.departmentName}</small>
-                  </span>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 p-3">
-                <p className="px-1 pb-2 text-xs text-muted-foreground">{me.data.employee.email}</p>
-                <div className="flex flex-col gap-4">
-                  <PreferredLanguageSetting employee={me.data.employee} available={me.data.capabilities.canChangePreferredLanguage} />
-                  {isDemoMode() && <DemoIdentitySwitcher />}
+    <SidebarProvider>
+      <AppSidebar entries={navigation} isActive={pathIsActive} onNavigate={navigate} />
+      <SidebarInset>
+        <header className="sticky top-0 z-40 h-16 shrink-0 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+          <div className="relative flex h-full items-center gap-3 px-3 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <SidebarTrigger />
+              {/* On desktop the brand lives at the top of the sidebar; phones have no sidebar, so
+                  the header carries it. */}
+              <div className="flex min-w-0 items-center gap-3 md:hidden">
+                <BrandMark />
+                <div className="min-w-0">
+                  <p className="leading-tight font-extrabold">{t("appName")}</p>
+                  <p className="truncate text-xs text-muted-foreground">Villa I Tatti</p>
                 </div>
-                <Separator className="my-3" />
-                <Button variant="ghost" className="w-full justify-start gap-2" onClick={signOut}>
-                  <LogOut className="size-4" />{t("signOut")}
-                </Button>
-              </PopoverContent>
-            </Popover>
+              </div>
+            </div>
+            {/* Header centerpiece, shared with Libra: the institutional wordmark. True centering
+                would collide with the flanking clusters below lg, so there the logo rejoins normal
+                flow and centres in the leftover space; phones carry the Ferie brand instead. */}
+            <div className="pointer-events-none hidden min-w-0 flex-1 justify-center md:flex lg:absolute lg:top-1/2 lg:left-1/2 lg:w-auto lg:flex-none lg:-translate-x-1/2 lg:-translate-y-1/2">
+              <ItattiLogo className="h-6 w-auto shrink-0 text-foreground" />
+            </div>
+            <div className="ml-auto flex items-center gap-1">
+              <ThemeToggle />
+              <Tooltip>
+                <TooltipTrigger
+                  render={<Button variant="ghost" size="icon" aria-label={t("language")} onClick={() => void selectLanguage(i18n.language === "en" ? "it" : "en")} />}
+                >
+                  <Languages className="size-5" />
+                </TooltipTrigger>
+                <TooltipContent>{t("language")}</TooltipContent>
+              </Tooltip>
+              <Popover>
+                <PopoverTrigger
+                  render={<button type="button" className="flex items-center gap-2.5 rounded-md p-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50" />}
+                >
+                    <Avatar className="size-9">
+                      <AvatarFallback className="bg-forest-100 text-sm font-semibold text-forest-800 dark:bg-forest-900 dark:text-forest-100">{initials}</AvatarFallback>
+                    </Avatar>
+                    <span className="hidden max-w-[190px] flex-col sm:flex">
+                      <strong className="truncate text-sm">{me.data.employee.displayName}</strong>
+                      <small className="truncate text-xs text-muted-foreground">{me.data.employee.departmentName}</small>
+                    </span>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-3">
+                  <p className="px-1 pb-2 text-xs text-muted-foreground">{me.data.employee.email}</p>
+                  <div className="flex flex-col gap-4">
+                    <PreferredLanguageSetting employee={me.data.employee} available={me.data.capabilities.canChangePreferredLanguage} />
+                    {isDemoMode() && <DemoIdentitySwitcher />}
+                  </div>
+                  <Separator className="my-3" />
+                  <Button variant="ghost" className="w-full justify-start gap-2" onClick={signOut}>
+                    <LogOut className="size-4" />{t("signOut")}
+                  </Button>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <aside className="fixed top-16 bottom-0 left-0 z-30 hidden w-61 flex-col border-r bg-sidebar p-3 md:flex">
-        <SidebarNav entries={navigation} isActive={pathIsActive} onNavigate={go} />
-        <div className="mt-auto flex flex-col gap-0.5 border-t px-2.5 pt-3 text-xs text-muted-foreground">
-          <span>37.5h · Europe/Rome</span>
-          <span>v{__APP_VERSION__}</span>
-        </div>
-      </aside>
-
-      {/* The offsets clear the fixed header and sidebar; `.page` owns the content padding itself. */}
-      <div className="pt-16 md:pl-61">
-        <main className="page">
+        {/* SidebarInset is already the page's <main>; `.page` owns the content padding itself. */}
+        <div className="page">
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Dashboard me={me.data} />} />
@@ -267,11 +335,11 @@ export function App() {
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </Suspense>
-        </main>
-      </div>
+        </div>
+      </SidebarInset>
 
       <nav
-        aria-label={i18n.language === "en" ? "Primary navigation" : "Navigazione principale"}
+        aria-label={t("mainNavigation")}
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
         {mobileNavigation.primary.map(({ path, label, icon: Icon, badge }) => (
@@ -318,6 +386,14 @@ export function App() {
           </DropdownMenu>
         )}
       </nav>
-    </div>
+    </SidebarProvider>
+  );
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>
   );
 }
