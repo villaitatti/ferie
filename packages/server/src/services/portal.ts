@@ -694,7 +694,9 @@ export async function listCalendar(request: Request, scope: "personal" | "depart
       endTime: entry.endTime,
       typeLabelIt: exact ? entry.absenceType.labelIt : "Assente",
       typeLabelEn: exact ? entry.absenceType.labelEn : "Absent",
-      sensitive: entry.absenceType.sensitivity === "SENSITIVE",
+      // Masked together with the label: the calendar colours sensitive entries differently, so a
+      // truthful flag would tell colleagues a generic "absent" is health- or family-related.
+      sensitive: exact && entry.absenceType.sensitivity === "SENSITIVE",
     };
   });
 }

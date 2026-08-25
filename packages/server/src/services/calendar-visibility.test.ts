@@ -52,6 +52,8 @@ describe("department calendar visibility (HR/CFO decision of 25 August 2026)", (
     expect(result).toHaveLength(1);
     expect(result[0]?.typeLabelIt).toBe("Assente");
     expect(result[0]?.typeLabelEn).toBe("Absent");
+    // The flag is masked with the label: the calendar colours sensitive entries differently.
+    expect(result[0]?.sensitive).toBe(false);
   });
 
   it("shows the exact type to the employee's responsabile", async () => {
@@ -60,7 +62,9 @@ describe("department calendar visibility (HR/CFO decision of 25 August 2026)", (
     mocks.requestFindMany.mockResolvedValue([calendarEntry(), calendarEntry({ id: "request-2", employeeId: "employee-2", employee: { displayName: "Alessandro Superbi" } })]);
     const result = await listCalendar(request, "department", "2026-09-01", "2026-09-30");
     expect(result.find((entry) => entry.id === "request-1")?.typeLabelIt).toBe("Malattia");
+    expect(result.find((entry) => entry.id === "request-1")?.sensitive).toBe(true);
     expect(result.find((entry) => entry.id === "request-2")?.typeLabelIt).toBe("Assente");
+    expect(result.find((entry) => entry.id === "request-2")?.sensitive).toBe(false);
   });
 
   it("shows the exact type to HR without querying assignments", async () => {

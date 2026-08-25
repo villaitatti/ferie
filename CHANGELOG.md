@@ -14,7 +14,10 @@ Implements the HR/CFO decisions of 25 August 2026 (docs/hr-cfo-open-questions.md
   own entries in full. The per-type visibility setting in Administration keeps working as the
   baseline: EXACT re-broadens a type for all colleagues, HIDDEN removes it from the department
   calendar for every viewer, with no exception for HR. All seeded absence types now default to the
-  generic level.
+  generic level, and a data migration moves existing EXACT rows to the same baseline on upgrade.
+  The sensitivity flag is masked together with the label, because the calendar colours sensitive
+  entries differently and a truthful flag would tell colleagues a generic "absent" is health- or
+  family-related.
 - The 37.5-hour full-time week (question 1) and manual HR entry of sickness with no INPS delegation
   (question 4) are confirmed as decided and recorded in the research and launch-gates notes; neither
   changes portal behavior, which already worked this way.
