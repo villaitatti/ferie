@@ -2,6 +2,16 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
+## [0.3.1] - 25 August 2026
+
+### Fixed
+
+- The main content area no longer shrinks to the width of its own content: inside the sidebar layout
+  the page was exempt from the flexbox stretch because of its centring margins, so on large monitors
+  it huddled, tiny, in the middle of the screen. The page now always fills the available width, and
+  its cap grows with the viewport — 1440px on laptops, up to 1840px on desktop displays such as a
+  27-inch Studio Display — so tables never stretch absurdly wide either.
+
 ## [0.3.0] - 24 August 2026
 
 This release aligns the portal with Libra's stack so the two apps stay easy to maintain together.
