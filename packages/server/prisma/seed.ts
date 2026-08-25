@@ -1,7 +1,20 @@
-import "dotenv/config";
-import { AppRole, Language, PrismaClient } from "@prisma/client";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { config as loadDotenv } from "dotenv";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { type AppRole, type Language, PrismaClient } from "../src/generated/prisma/client.js";
 
-const prisma = new PrismaClient();
+// Same root-.env convention as prisma.config.ts: `pnpm db:seed` runs with packages/server as the
+// working directory, so a bare `dotenv/config` would miss the repository-root .env. No fallback
+// URL either — parallel checkouts share localhost, and a silent default could seed another
+// workspace's database.
+const rootEnv = resolve(import.meta.dirname, "../../../.env");
+loadDotenv(existsSync(rootEnv) ? { path: rootEnv, quiet: true } : { quiet: true });
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set. Create the repository-root .env (see .env.example) or export it before seeding.");
+}
+
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 const standardSchedule = [1, 2, 3, 4, 5].flatMap((weekday) => [
   { weekday, start: "09:00", end: "13:00" },
   { weekday, start: "13:30", end: "17:00" },

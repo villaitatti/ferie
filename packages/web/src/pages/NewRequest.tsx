@@ -104,6 +104,7 @@ export function NewRequest({ me }: { me: MeResponse }) {
     retry: false,
   });
   const preview = previewQuery.data ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs only when a new preview arrives — re-running on each allocation keystroke would clobber the user's split.
   useEffect(() => {
     if (!preview || kind !== "FERIE") return;
     if (Math.abs(Number(ferie) + Number(exFestivita) - preview.quantity) < 0.001) return;

@@ -1,6 +1,6 @@
 {
   "name": "@ferie/server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,22 +18,23 @@
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1030.0",
     "@ferie/shared": "workspace:*",
-    "@prisma/client": "^6.19.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
     "cors": "^2.8.5",
     "csv-parse": "^5.6.0",
     "dotenv": "^16.4.0",
-    "express": "^4.21.0",
+    "express": "^5.2.1",
     "express-jwt": "^8.5.0",
-    "express-rate-limit": "^7.5.0",
+    "express-rate-limit": "^8.6.2",
     "helmet": "^8.1.0",
-    "jwks-rsa": "^3.2.0",
+    "jwks-rsa": "^4.1.0",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
     "pg-boss": "^10.4.2",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "read-excel-file": "^9.3.3",
-    "zod": "^3.24.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.0",
@@ -42,7 +43,7 @@
     "@types/node": "^25.5.0",
     "@types/supertest": "^7.2.0",
     "pino-pretty": "^13.1.3",
-    "prisma": "^6.19.0",
+    "prisma": "^7.9.1",
     "supertest": "^7.2.2",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",

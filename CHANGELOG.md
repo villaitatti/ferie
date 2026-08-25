@@ -2,7 +2,24 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
-## Unreleased
+## [0.3.0] - 24 August 2026
+
+This release aligns the portal with Libra's stack so the two apps stay easy to maintain together.
+
+### Added
+
+- The I Tatti wordmark sits at the centre of the header, exactly as in Libra: crimson mark, theme-aware
+  lettering, hidden on phones where the header carries the Ferie brand instead.
+- Dark mode. The header gains a theme toggle next to the language switch; the choice persists across
+  visits and, on first visit, follows the operating system preference. Every design token — the shadcn
+  set, the sidebar, the charts and the seven status tones — has a dark counterpart, so status chips,
+  the toasts, the request calendar markers and the department calendar all repaint. The theme is
+  applied before first paint by an external bootstrap script, so a reload never flashes the wrong
+  theme, and the browser chrome colour follows along.
+- The navigation is now the shadcn sidebar shared with Libra: collapsible to an icon rail from the
+  header toggle or with Cmd/Ctrl+B, resizable by dragging its edge, and remembered across visits. On
+  desktop the brand moved from the header into the sidebar; phones keep the bottom tab bar and get the
+  same sidebar as a drawer.
 
 ### Changed
 
@@ -29,6 +46,13 @@ All notable changes to the Ferie Portal are documented in this file.
 - The production build groups React by module path rather than package name, so the framework chunk
   actually contains `react-dom`'s code and stays cached across deploys instead of being re-downloaded
   with every application change.
+- The toolchain now matches Libra's: Vite 8 (Rolldown), Base UI 1.7, i18next 26, Zod 4, Prisma 7 with
+  the Postgres driver adapter (no more native engines — the Docker image drops the engine-copying
+  step and its openssl dependency, and the Prisma CLI reads the root `.env` through `prisma.config.ts`
+  so database commands work from any directory), Express 5, express-rate-limit 8 and jwks-rsa 4.
+- Biome now lints the whole repository (the same lint-only configuration as Libra) and CI runs it
+  between the migrations and the typecheck. The request-picker legend became a real list element and
+  a handful of implicitly-typed variables and hook dependencies were tightened along the way.
 
 ### Fixed
 

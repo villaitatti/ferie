@@ -29,8 +29,8 @@
 .request-picker-tooltip-marker { flex: 0 0 auto; margin-top: 6px; }
 
 .request-picker-legend-block { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
-.request-picker-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 8px; margin-top: 6px; }
-.request-picker-legend > [role="listitem"] { min-width: 0; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.request-picker-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
+.request-picker-legend > li { min-width: 0; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
 .request-picker-legend .request-picker-dot { width: 8px; height: 8px; }
 .request-picker-non-working { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--border); background: var(--muted); border-radius: 2px; }
 

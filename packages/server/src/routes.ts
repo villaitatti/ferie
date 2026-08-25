@@ -77,11 +77,11 @@ api.post("/admin/future-absence-imports/file", upload.single("file"), asyncHandl
   if (!sourceRows.length) throw new HttpError(400, "EMPTY_WORKBOOK");
   const grouped = new Map<string, Record<string, unknown> & { allocations: Array<{ accountCode: string; amount: number }> }>();
   sourceRows.forEach((row, index) => {
-    const externalReference = String(row.externalReference ?? row["Riferimento"] ?? "").trim();
+    const externalReference = String(row.externalReference ?? row.Riferimento ?? "").trim();
     const key = externalReference || `row-${index + 1}`;
     const existing = grouped.get(key) ?? {
-      employeeNumber: String(row.employeeNumber ?? row["Matricola"] ?? "").trim(),
-      absenceTypeCode: String(row.absenceTypeCode ?? row["Tipologia"] ?? "").trim().toUpperCase(),
+      employeeNumber: String(row.employeeNumber ?? row.Matricola ?? "").trim(),
+      absenceTypeCode: String(row.absenceTypeCode ?? row.Tipologia ?? "").trim().toUpperCase(),
       startDate: String(row.startDate ?? row["Data inizio"] ?? "").slice(0, 10),
       endDate: String(row.endDate ?? row["Data fine"] ?? "").slice(0, 10),
       startTime: String(row.startTime ?? row["Ora inizio"] ?? "").trim() || undefined,
@@ -89,8 +89,8 @@ api.post("/admin/future-absence-imports/file", upload.single("file"), asyncHandl
       externalReference: externalReference || undefined,
       allocations: [],
     };
-    const accountCode = String(row.accountCode ?? row["Conto"] ?? "").trim().toUpperCase();
-    if (accountCode) existing.allocations.push({ accountCode, amount: Number(row.amount ?? row["Quantità"]) });
+    const accountCode = String(row.accountCode ?? row.Conto ?? "").trim().toUpperCase();
+    if (accountCode) existing.allocations.push({ accountCode, amount: Number(row.amount ?? row.Quantità) });
     grouped.set(key, existing);
   });
   response.status(201).json(await importFutureAbsences(request, { sourceName: request.file.originalname, rows: [...grouped.values()] }));
@@ -101,9 +101,9 @@ api.post("/admin/balance-imports/file/preview", upload.single("file"), asyncHand
   const sourceRows = await tabularRows(request.file);
   if (!sourceRows.length) throw new HttpError(400, "EMPTY_WORKBOOK");
   const rows = sourceRows.map((row) => ({
-    employeeNumber: String(row.employeeNumber ?? row["Matricola"] ?? "").trim(),
-    accountCode: String(row.accountCode ?? row["Conto"] ?? "").trim().toUpperCase(),
-    amount: Number(row.amount ?? row["Saldo"]),
+    employeeNumber: String(row.employeeNumber ?? row.Matricola ?? "").trim(),
+    accountCode: String(row.accountCode ?? row.Conto ?? "").trim().toUpperCase(),
+    amount: Number(row.amount ?? row.Saldo),
     asOf: String(row.asOf ?? row["Data saldo"] ?? "").slice(0, 10),
   }));
   response.json(await previewBalanceImport(request, { sourceName: request.file.originalname, cutoffDate: String(request.body.cutoffDate), rows }));

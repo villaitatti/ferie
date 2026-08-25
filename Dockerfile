@@ -20,25 +20,24 @@ ENV VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
 RUN pnpm db:generate && pnpm build
 
 FROM build AS production-dependencies
+# Prisma 7's generated client lives in src/generated and is bundled into dist by tsup; only the
+# @prisma/client runtime (a prod dependency) is needed at runtime, so no engine or .prisma copying.
 RUN pnpm --filter @ferie/server deploy --prod --legacy /prod/server
-RUN source_client="$(find /app/node_modules -path '*/node_modules/.prisma/client/index.js' -print -quit)" \
-    && target_client="$(readlink -f /prod/server/node_modules/@prisma/client)" \
-    && target_modules="$(dirname "$(dirname "$target_client")")" \
-    && test -n "$source_client" \
-    && test -n "$target_client" \
-    && cp -R "$(dirname "$(dirname "$source_client")")" "$target_modules/.prisma" \
-    && find /prod/server/node_modules -type l \( -name prisma -o -name typescript \) -delete \
+# `pnpm deploy --prod` still materializes @prisma/client's optional peers — the prisma CLI, its
+# engines, and typescript — which the runtime never uses; pruning them halves node_modules.
+RUN find /prod/server/node_modules -type l \( -name prisma -o -name typescript \) -delete \
     && find /prod/server/node_modules -path '*/node_modules/.bin/prisma' -delete \
     && find /prod/server/node_modules -path '*/node_modules/.bin/tsc' -delete \
     && find /prod/server/node_modules -path '*/node_modules/.bin/tsserver' -delete \
-    && find /prod/server/node_modules/.pnpm -maxdepth 1 -type d \( -name 'prisma@*' -o -name 'typescript@*' \) -exec rm -rf {} +
+    && find /prod/server/node_modules/.pnpm -maxdepth 1 -type d \( -name 'prisma@*' -o -name 'typescript@*' -o -name '@prisma+engines*' \) -exec rm -rf {} +
 
 FROM build AS migration
 ENV NODE_ENV=production
 CMD ["pnpm", "--filter", "@ferie/server", "db:deploy"]
 
 FROM node:22-bookworm-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends curl openssl && rm -rf /var/lib/apt/lists/*
+# curl serves the container healthcheck; Prisma 7 no longer needs openssl (no native engines).
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=production-dependencies /prod/server/node_modules ./node_modules

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Request } from "express";
-import { Prisma, type HolidayRule } from "@prisma/client";
+import { Prisma, type HolidayRule } from "../generated/prisma/client.js";
 import {
   allocationsEqualDays,
   balanceAdjustmentSchema,
@@ -348,7 +348,7 @@ async function calculateRequestPreview(
     for (const { date, ...holiday } of holidayOccurrences) {
       holidaysByDate.set(date, [...(holidaysByDate.get(date) ?? []), holiday]);
     }
-    let calculation;
+    let calculation: ReturnType<typeof calculateVacationDays>;
     try { calculation = calculateVacationDays(input.startDate, input.endDate, schedule, holidays); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "INVALID_DATE_RANGE"); }
     if (calculation.quantityDays === 0) throw new HttpError(400, "NO_WORKING_DAYS");
@@ -373,7 +373,7 @@ async function calculateRequestPreview(
   const replacementCredits = new Map<string, number>();
   if (excludeRequestId) {
     const replaced = await db.requestBalanceAllocation.findMany({ where: { requestId: excludeRequestId, reversedAt: null }, include: { account: true } });
-    replaced.forEach((allocation) => replacementCredits.set(allocation.account.code, number(allocation.amount)));
+    for (const allocation of replaced) replacementCredits.set(allocation.account.code, number(allocation.amount));
   }
   const overBalance = allocations.some((allocation) => {
     const balance = balances.find((entry) => entry.code === allocation.accountCode);
@@ -414,7 +414,7 @@ export async function submitRequest(request: Request, raw: unknown) {
     const preview = await calculateRequestPreview(employee, input, input.revisionOfId, tx);
     if (input.absenceTypeCode === "FERIE" && preview.allocations.length === 0) throw new HttpError(400, "BALANCE_ALLOCATION_REQUIRED");
     const absenceType = await tx.absenceType.findUnique({ where: { code: input.absenceTypeCode } });
-    if (!absenceType || !absenceType.active) throw new HttpError(400, "ABSENCE_TYPE_DISABLED");
+    if (!absenceType?.active) throw new HttpError(400, "ABSENCE_TYPE_DISABLED");
     if (absenceType.entryMode === "ADMIN_ONLY") throw new HttpError(403, "ADMIN_ENTRY_REQUIRED");
     if (parent) {
       const changed = await tx.absenceRequest.updateMany({ where: { id: parent.id, status: "APPROVED" }, data: { status: "CHANGE_REQUESTED" } });
@@ -581,7 +581,7 @@ export async function decideRequest(request: Request, id: string, raw: unknown) 
     if (current.status !== input.expectedStatus) throw new HttpError(409, "REQUEST_STATUS_CHANGED");
     const cancellation = current.status === "CANCELLATION_REQUESTED";
     const exceedsNow = !cancellation && await requestWouldExceedBalance(current.id, tx);
-    let toStatus;
+    let toStatus: ReturnType<typeof resolveDecisionTransition>;
     try {
       toStatus = resolveDecisionTransition({ status: current.status, action: input.action, overBalance: current.overBalance || exceedsNow, isFinalApprover: actor.roles.includes("FERIE_FINAL_APPROVER") });
     } catch (error) {
@@ -685,10 +685,10 @@ export async function createSensitiveAbsence(request: Request, raw: unknown) {
     const target = await tx.employeeMirror.findUnique({ where: { id: authorizedTarget.id } });
     if (!target) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
     const absenceType = await tx.absenceType.findUnique({ where: { code: input.absenceTypeCode } });
-    if (!absenceType || absenceType.entryMode !== "ADMIN_ONLY") throw new HttpError(400, "ADMIN_ABSENCE_TYPE_REQUIRED");
+    if (absenceType?.entryMode !== "ADMIN_ONLY") throw new HttpError(400, "ADMIN_ABSENCE_TYPE_REQUIRED");
     await checkOverlap(tx, target.id, input);
     const holidays = await effectiveHolidayDates(input.startDate, input.endDate, tx);
-    let calculation;
+    let calculation: ReturnType<typeof calculateVacationDays>;
     try {
       calculation = calculateVacationDays(input.startDate, input.endDate, target.schedule as unknown as WorkInterval[], holidays);
     } catch (error) {

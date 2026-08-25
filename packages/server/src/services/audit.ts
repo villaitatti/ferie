@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function audit(

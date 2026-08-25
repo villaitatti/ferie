@@ -1,6 +1,6 @@
 {
   "name": "@ferie/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.2.0",
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "^1.7.0",
     "@ferie/shared": "workspace:*",
     "@fullcalendar/core": "^6.1.20",
     "@fullcalendar/daygrid": "^6.1.20",
@@ -25,12 +25,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
-    "i18next": "^25.6.3",
+    "i18next": "^26.4.0",
     "lucide-react": "^0.548.0",
     "react": "^19.0.0",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.0.0",
-    "react-i18next": "^16.3.5",
+    "react-i18next": "^17.0.12",
     "react-router-dom": "^7.1.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
@@ -43,10 +43,10 @@
     "@types/node": "^25.5.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^6.1.0",
     "jsdom": "^27.0.1",
     "typescript": "^5.7.0",
-    "vite": "^7.1.12",
+    "vite": "^8.2.2",
     "vitest": "^4.1.2"
   }
 }

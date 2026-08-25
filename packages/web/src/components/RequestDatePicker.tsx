@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Temporal } from "@js-temporal/polyfill";
 import type { RequestCalendarDay, RequestCalendarMarker, RequestCalendarResponse, WorkInterval } from "@ferie/shared";
 import { AlertTriangleIcon, CalendarDaysIcon, XIcon } from "lucide-react";
-import { type ComponentProps, createContext, useContext, useEffect, useId, useMemo, useState } from "react";
+import { type ComponentProps, createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
 import type { DateRange } from "react-day-picker";
 import { useTranslation } from "react-i18next";
 
@@ -179,6 +179,7 @@ export function RequestDatePicker({ kind, startDate, endDate, schedule, revision
   const daysByDate = useMemo(() => new Map((calendar.data?.days ?? []).map((day) => [day.date, day])), [calendar.data]);
   const locale = i18n.language === "en" ? "en" : "it";
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: kind and revisionOfId are reset triggers, deliberately unused in the callback.
   useEffect(() => setConflictMessage(null), [kind, revisionOfId]);
   // Re-centre on the selection whenever the panel opens, so a loaded revision shows its own month.
   useEffect(() => { if (open && startDate) setDisplayedDate(startDate); }, [open, startDate]);
@@ -186,11 +187,11 @@ export function RequestDatePicker({ kind, startDate, endDate, schedule, revision
   // otherwise reopening and starting a new range paints a band out to wherever the pointer last was.
   useEffect(() => { if (!open) setHovered(null); }, [open]);
 
-  const requestStatusLabel = (request: RequestCalendarMarker) => {
+  const requestStatusLabel = useCallback((request: RequestCalendarMarker) => {
     if (request.absenceTypeCode === "FERIE") return request.state === "APPROVED" ? t("calendarFerieApproved") : t("calendarFeriePending");
     if (request.absenceTypeCode === "PERMESSO") return request.state === "APPROVED" ? t("calendarPermessoApproved") : t("calendarPermessoPending");
     return request.state === "APPROVED" ? t("calendarApproved") : t("calendarPending");
-  };
+  }, [t]);
 
   const dayLabel = (date: string, day?: RequestCalendarDay) => {
     const labels = [formatPortalDate(date, locale)];
@@ -211,7 +212,7 @@ export function RequestDatePicker({ kind, startDate, endDate, schedule, revision
     holidayLabel: t("calendarHoliday"),
     nonWorkingLabel: t("calendarNonWorking"),
     requestStatusLabel,
-  }), [daysByDate, schedule, locale, i18n.language]);
+  }), [daysByDate, schedule, locale, t, requestStatusLabel]);
 
   const fetchRange = (from: string, to: string) => queryClient.fetchQuery({
     queryKey: ["request-calendar", from, to],
@@ -393,14 +394,14 @@ export function RequestDatePicker({ kind, startDate, endDate, schedule, revision
     </div>
     <div className="request-picker-legend-block">
       <p className="text-xs font-semibold text-muted-foreground">{t("calendarLegend")}</p>
-      <div className="request-picker-legend" role="list" aria-label={t("calendarLegend")}>
-        <span className="text-xs" role="listitem"><span className="request-picker-dot request-picker-dot-red" />{t("calendarHoliday")}</span>
-        <span className="text-xs" role="listitem"><span className="request-picker-non-working" />{t("calendarNonWorking")}</span>
-        <span className="text-xs" role="listitem"><span className="request-picker-dot request-picker-dot-green" />{t("calendarFerieApproved")}</span>
-        <span className="text-xs" role="listitem"><span className="request-picker-dot request-picker-dot-yellow" />{t("calendarFeriePending")}</span>
-        <span className="text-xs" role="listitem"><span className="request-picker-dot request-picker-dot-blue" />{t("calendarPermessoApproved")}</span>
-        <span className="text-xs" role="listitem"><span className="request-picker-dot request-picker-dot-violet" />{t("calendarPermessoPending")}</span>
-      </div>
+      <ul className="request-picker-legend" aria-label={t("calendarLegend")}>
+        <li className="text-xs"><span className="request-picker-dot request-picker-dot-red" />{t("calendarHoliday")}</li>
+        <li className="text-xs"><span className="request-picker-non-working" />{t("calendarNonWorking")}</li>
+        <li className="text-xs"><span className="request-picker-dot request-picker-dot-green" />{t("calendarFerieApproved")}</li>
+        <li className="text-xs"><span className="request-picker-dot request-picker-dot-yellow" />{t("calendarFeriePending")}</li>
+        <li className="text-xs"><span className="request-picker-dot request-picker-dot-blue" />{t("calendarPermessoApproved")}</li>
+        <li className="text-xs"><span className="request-picker-dot request-picker-dot-violet" />{t("calendarPermessoPending")}</li>
+      </ul>
     </div>
     {conflictMessage && <Alert className={cn("mt-3", toneSoft.red, toneBorder.red)}><AlertTriangleIcon /><AlertDescription className="text-current">{conflictMessage}</AlertDescription></Alert>}
     {(calendar.isError || selectionMetadataUnavailable) && <Alert className={cn("mt-3", toneSoft.orange, toneBorder.orange)}><AlertTriangleIcon /><AlertDescription className="text-current">{t("calendarUnavailable")}</AlertDescription></Alert>}

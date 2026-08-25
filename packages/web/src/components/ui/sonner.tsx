@@ -1,7 +1,7 @@
 import type * as React from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-/** The portal is light-only, so the toaster is wired straight to the design tokens. */
+/** Wired straight to the design tokens, which carry both themes, so no theme prop is needed. */
 function Toaster(props: ToasterProps) {
   return (
     <Sonner

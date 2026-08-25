@@ -12,7 +12,7 @@ Internal bilingual absence-management portal for Villa I Tatti staff in Florence
 
 ## Local development
 
-Node 22, pnpm 10.32.1, and Docker are required.
+Node 22.12 or newer (required by Vite 8 and Prisma 7), pnpm 10.32.1, and Docker are required.
 
 ```bash
 cp .env.example .env
@@ -25,7 +25,7 @@ pnpm dev
 
 Open `http://localhost:5173`. Development defaults to demo authentication. The profile menu switches between staff, pre-approver, department head, HR/final approver, and IT identities, and between every synchronized employee once a directory sync has run.
 
-The Prisma CLI and the seed script read `packages/server/.env`; link it to the repository root file with `ln -s ../../.env packages/server/.env`. `DEV_DB_PORT` moves the published database port when another checkout already uses `5433`; change the port in `DATABASE_URL` to match, because neither value is derived from the other and a mismatch connects the portal to whatever still listens on the old port. `PORT` moves the API when another checkout already uses `3000`, and the Vite dev proxy follows it.
+The Prisma CLI and the seed script read the repository-root `.env` through `packages/server/prisma.config.ts`, so database commands work from any directory without copying or linking env files. `DEV_DB_PORT` moves the published database port when another checkout already uses `5433`; change the port in `DATABASE_URL` to match, because neither value is derived from the other and a mismatch connects the portal to whatever still listens on the old port. `PORT` moves the API when another checkout already uses `3000`, and the Vite dev proxy follows it.
 
 ### Interface
 
@@ -38,7 +38,10 @@ every platform.
 
 - `src/index.css` holds the token set — the Villa I Tatti forest-green scale, plus the six status tones
   that absence states, balances and reconciliation cases share. Components read tokens, never literal
-  colours; `src/lib/tone.ts` names the status mapping once.
+  colours; `src/lib/tone.ts` names the status mapping once. Every token has a `.dark` counterpart;
+  `src/lib/theme.tsx` toggles the class (persisted as `ferie-theme`) and `public/theme-init.js` applies
+  it before first paint. The forest brand scale alone is not remapped in dark mode — its steps are
+  absolute, so the few light-step/dark-step pairings carry explicit `dark:` classes instead.
 - `src/components/ui` is the generated shadcn layer. Files added by `pnpm dlx shadcn@latest add` are
   kept as generated except where noted in a comment, so a later re-add is a readable diff. Several carry
   local fixes, each commented in place and worth re-checking after an upgrade: `tabs` (its orientation
@@ -48,7 +51,10 @@ every platform.
   overrides were built inline, so every render remounted the grid and could drop a click, and its month
   dropdown showed the raw month index because `items` was never passed to the select. `dialog`, `sheet`
   and `spinner` replace hardcoded English accessibility text with translations, and `button` adds a
-  Mantine-style `loading` prop.
+  Mantine-style `loading` prop. `sidebar` is ported from Libra's customized copy rather than generated:
+  the stock shadcn component plus a drag-resizable rail, `ferie-sidebar`/`ferie-sidebar-width`
+  localStorage persistence, translated accessibility text, and a `SidebarMenuBadge` slot for the
+  pending-approvals count.
 - The local additions are the controls shadcn does not ship: `segmented-control`, `number-field`,
   `file-field`, `date-field`, `combobox-field`, `stepper`, `form-field`, and `picker-surface`, which is
   the dropdown-versus-sheet switch every picker uses.
