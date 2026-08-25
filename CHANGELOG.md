@@ -2,6 +2,23 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
+## [0.4.0] - 25 August 2026
+
+Implements the HR/CFO decisions of 25 August 2026 (docs/hr-cfo-open-questions.md, questions 1, 2, 4).
+
+### Changed
+
+- Department calendar privacy now follows the decided model: colleagues see the employee's name with
+  a generic "Assente"/"Absent" and no absence type, while the employee's responsabile (or substitute)
+  and HR (final approver or portal administrator roles) see the exact type. Everyone still sees their
+  own entries in full. The per-type visibility setting in Administration keeps working as the
+  baseline: EXACT re-broadens a type for all colleagues, HIDDEN removes it from the department
+  calendar for every viewer, with no exception for HR. All seeded absence types now default to the
+  generic level.
+- The 37.5-hour full-time week (question 1) and manual HR entry of sickness with no INPS delegation
+  (question 4) are confirmed as decided and recorded in the research and launch-gates notes; neither
+  changes portal behavior, which already worked this way.
+
 ## [0.3.1] - 25 August 2026
 
 ### Fixed

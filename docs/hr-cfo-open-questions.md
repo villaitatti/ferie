@@ -9,11 +9,15 @@ Fonti: [research-and-launch-gates.md](research-and-launch-gates.md) (punti 1–5
 
 **Perché è importante:** Il portale calcola i permessi a ore sull'orario reale di ciascuno. Se un domani un dipendente o un ispettore contestasse l'orario, dobbiamo poter mostrare su quale base le 37,5 ore sono state stabilite. *Esempio: se Maria chiede un permesso di 2 ore e il suo pomeriggio dura dalle 13:30 alle 17:00, il portale scala esattamente 2 ore dal suo monte ore — ma quel monte ore ha senso solo se l'orario di 37,5 ore è documentato da qualche parte.*
 
+**Risposta:** 37,5
+
 ## 2. Calendario di reparto: chi vede cosa?
 
 **Domanda:** Nel calendario condiviso del reparto oggi è previsto che i colleghi vedano nome e tipo di assenza approvata (es. "Paolo — ferie", "Anna — malattia"). Confermiamo questa scelta? E chi la mette per iscritto? Servono anche: per quanto tempo conserviamo questi dati, ogni quanto ricontrolliamo chi ha accesso, e la registrazione di questo trattamento nel registro privacy.
 
 **Perché è importante:** Mostrare il tipo di assenza è un'informazione delicata. *Esempio: se nel calendario compare "Anna — malattia" visibile a tutto il reparto, tutti sanno che Anna è malata. È legittimo farlo, ma serve una decisione formale scritta da chi ne ha la responsabilità (HR e responsabile privacy), altrimenti in caso di reclamo non abbiamo nulla in mano.* Se invece preferiamo mostrare solo "Anna — assente" senza il motivo, va deciso adesso: cambiarlo dopo il lancio è possibile ma confonde le persone.
+
+**Risposta:** I colleghi del dipartimento possono vedere solo "assente" generico, mentre i capi dipartimenti e HR possono vedere i dettagli.
 
 ## 3. Collegamento con Zucchetti (paghe): cosa abbiamo comprato esattamente?
 
@@ -26,6 +30,8 @@ Fonti: [research-and-launch-gates.md](research-and-launch-gates.md) (punti 1–5
 **Domanda:** L'INPS permette al datore di lavoro di ricevere gli attestati di malattia in automatico, ma serve una delega formale e una valutazione legale e di riservatezza. Vogliamo avviare questo percorso, o per ora HR continua a registrare le malattie a mano?
 
 **Perché è importante:** *Esempio: oggi quando Paolo si ammala, HR riceve la comunicazione e inserisce le date nel portale a mano. Con la delega INPS le date arriverebbero da sole. Ma la delega dà accesso a dati sanitari, quindi prima serve il via libera formale della direzione — non è una decisione tecnica.* Se la risposta è "non ora", va benissimo: il portale funziona comunque, ma è bene metterlo a verbale.
+
+**Risposta:** responsabile HR inserisce manualmente le malattie.
 
 ## 5. Assenze speciali: quali regole?
 

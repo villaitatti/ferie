@@ -662,17 +662,41 @@ export async function listCalendar(request: Request, scope: "personal" | "depart
   const entries = await prisma.absenceRequest.findMany({ where, include: { employee: true, absenceType: true }, orderBy: { startDate: "asc" } });
   const visible = entries.filter((entry) => scope === "personal" || entry.absenceType.departmentVisibility !== "HIDDEN");
   if (visible.some((entry) => entry.absenceType.sensitivity === "SENSITIVE")) await audit(request, "SENSITIVE_CALENDAR_ACCESSED", "Calendar", actor.departmentId, { scope, count: visible.filter((entry) => entry.absenceType.sensitivity === "SENSITIVE").length });
-  return visible.map((entry) => ({
-    id: entry.id,
-    employeeName: entry.employee.displayName,
-    startDate: isoDate(entry.startDate),
-    endDate: isoDate(entry.endDate),
-    startTime: entry.startTime,
-    endTime: entry.endTime,
-    typeLabelIt: scope === "personal" || entry.absenceType.departmentVisibility === "EXACT" ? entry.absenceType.labelIt : "Assente",
-    typeLabelEn: scope === "personal" || entry.absenceType.departmentVisibility === "EXACT" ? entry.absenceType.labelEn : "Absent",
-    sensitive: entry.absenceType.sensitivity === "SENSITIVE",
-  }));
+  // Decision of 25 August 2026 (docs/hr-cfo-open-questions.md, question 2): colleagues see a generic
+  // "absent" while department heads and HR see the exact type. A viewer is privileged for an entry
+  // when they hold an HR role or are that employee's responsabile (or substitute); everyone sees
+  // their own entries. The per-type setting stays the colleague baseline — EXACT can re-broaden a
+  // type for everyone, HIDDEN removes it from the department calendar for every viewer.
+  const hrViewer = actor.roles.some((role) => role === "FERIE_FINAL_APPROVER" || role === "FERIE_PORTAL_ADMIN");
+  const managedEmployeeIds = new Set(
+    scope === "department" && !hrViewer
+      ? (
+          await prisma.approverAssignment.findMany({
+            where: { approverId: actor.id, role: { in: ["RESPONSABILE", "SUBSTITUTE_RESPONSABILE"] } },
+            select: { employeeId: true },
+          })
+        ).map((assignment) => assignment.employeeId)
+      : [],
+  );
+  return visible.map((entry) => {
+    const exact =
+      scope === "personal" ||
+      hrViewer ||
+      entry.employeeId === actor.id ||
+      managedEmployeeIds.has(entry.employeeId) ||
+      entry.absenceType.departmentVisibility === "EXACT";
+    return {
+      id: entry.id,
+      employeeName: entry.employee.displayName,
+      startDate: isoDate(entry.startDate),
+      endDate: isoDate(entry.endDate),
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      typeLabelIt: exact ? entry.absenceType.labelIt : "Assente",
+      typeLabelEn: exact ? entry.absenceType.labelEn : "Absent",
+      sensitive: entry.absenceType.sensitivity === "SENSITIVE",
+    };
+  });
 }
 
 export async function createSensitiveAbsence(request: Request, raw: unknown) {
