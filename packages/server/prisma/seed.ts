@@ -68,12 +68,14 @@ async function main() {
   for (const account of accounts) await prisma.balanceAccount.upsert({ where: { code: account.code }, create: account, update: account });
   const permessoAccount = await prisma.balanceAccount.findUniqueOrThrow({ where: { code: "PERMESSO" } });
 
+  // GENERIC everywhere per the 25 August 2026 HR/CFO decision: colleagues see "absent" without the
+  // type; department heads and HR see the exact type through the viewer-aware calendar logic.
   const absenceTypes = [
-    { code: "FERIE", labelIt: "Ferie", labelEn: "Annual leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "SELF_SERVICE" as const, sensitivity: "STANDARD" as const, balanceAccountId: null, requiresApproval: true, departmentVisibility: "EXACT" as const },
-    { code: "PERMESSO", labelIt: "Permesso", labelEn: "Hourly leave", durationMode: "MINUTES_SINGLE_DAY" as const, entryMode: "SELF_SERVICE" as const, sensitivity: "STANDARD" as const, balanceAccountId: permessoAccount.id, requiresApproval: true, departmentVisibility: "EXACT" as const },
-    { code: "MALATTIA", labelIt: "Malattia", labelEn: "Sick leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "ADMIN_ONLY" as const, sensitivity: "SENSITIVE" as const, balanceAccountId: null, requiresApproval: false, departmentVisibility: "EXACT" as const },
-    { code: "LEGGE_104", labelIt: "Legge 104", labelEn: "Law 104 leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "ADMIN_ONLY" as const, sensitivity: "SENSITIVE" as const, balanceAccountId: null, requiresApproval: false, departmentVisibility: "EXACT" as const },
-    { code: "CONGEDO_PARENTALE", labelIt: "Congedo parentale", labelEn: "Parental leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "ADMIN_ONLY" as const, sensitivity: "SENSITIVE" as const, balanceAccountId: null, requiresApproval: false, departmentVisibility: "EXACT" as const },
+    { code: "FERIE", labelIt: "Ferie", labelEn: "Annual leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "SELF_SERVICE" as const, sensitivity: "STANDARD" as const, balanceAccountId: null, requiresApproval: true, departmentVisibility: "GENERIC" as const },
+    { code: "PERMESSO", labelIt: "Permesso", labelEn: "Hourly leave", durationMode: "MINUTES_SINGLE_DAY" as const, entryMode: "SELF_SERVICE" as const, sensitivity: "STANDARD" as const, balanceAccountId: permessoAccount.id, requiresApproval: true, departmentVisibility: "GENERIC" as const },
+    { code: "MALATTIA", labelIt: "Malattia", labelEn: "Sick leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "ADMIN_ONLY" as const, sensitivity: "SENSITIVE" as const, balanceAccountId: null, requiresApproval: false, departmentVisibility: "GENERIC" as const },
+    { code: "LEGGE_104", labelIt: "Legge 104", labelEn: "Law 104 leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "ADMIN_ONLY" as const, sensitivity: "SENSITIVE" as const, balanceAccountId: null, requiresApproval: false, departmentVisibility: "GENERIC" as const },
+    { code: "CONGEDO_PARENTALE", labelIt: "Congedo parentale", labelEn: "Parental leave", durationMode: "FULL_DAY_RANGE" as const, entryMode: "ADMIN_ONLY" as const, sensitivity: "SENSITIVE" as const, balanceAccountId: null, requiresApproval: false, departmentVisibility: "GENERIC" as const },
   ];
   for (const type of absenceTypes) await prisma.absenceType.upsert({ where: { code: type.code }, create: type, update: type });
 

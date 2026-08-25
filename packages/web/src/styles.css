@@ -93,7 +93,11 @@
 
 /* ---- Shell -------------------------------------------------------------------------------- */
 
-.page { padding: 28px clamp(18px, 4vw, 54px) 54px; max-width: 1440px; margin-inline: auto; }
+/* Explicit width: the sidebar shell is a flex column, and a flex item with auto inline margins is
+   exempt from align-items: stretch — without it the page shrinks to its content width and floats,
+   tiny, in the middle of large screens. The cap grows with the viewport (1440px on laptops, up to
+   1840px on desktop displays) so wide monitors get breathing room without stretching tables forever. */
+.page { width: 100%; padding: 28px clamp(18px, 4vw, 54px) 54px; max-width: clamp(1440px, 82vw, 1840px); margin-inline: auto; }
 .balance-tile { min-height: 142px; border-top: 3px solid var(--forest-600); }
 .balance-tile:nth-child(2) { border-top-color: var(--chart-2); }
 .balance-tile:nth-child(3) { border-top-color: var(--chart-3); }

@@ -2,7 +2,7 @@
 
 ## Contract and holiday rules
 
-The 2026-2028 discipline provides the legal baseline for vacation, suppressed-holiday allowances, permissions, sickness, and family leave. It describes a 36-hour standard week; the Florence office has confirmed that its operational full-time schedule is 37.5 hours. The portal therefore uses explicit ED work intervals and never calculates statutory accrual. HR must document the contractual basis for 37.5 hours before production launch.
+The 2026-2028 discipline provides the legal baseline for vacation, suppressed-holiday allowances, permissions, sickness, and family leave. It describes a 36-hour standard week; on 25 August 2026 HR/CFO confirmed the operational full-time schedule is 37.5 hours (docs/hr-cfo-open-questions.md, question 1). The portal therefore uses explicit ED work intervals and never calculates statutory accrual. HR must still produce the written contractual basis for 37.5 hours before production launch.
 
 - [2026-2028 employment discipline](https://www.fpcgil.it/wp-content/uploads/2026/03/Disciplina-Ambasciate-triennio-2026-28.pdf)
 - [Italian working-time law](https://www.lavoro.gov.it/sites/default/files/documenti-e-norme/normative/Documents/2003/20030408_DLGS_66.pdf)
@@ -15,7 +15,7 @@ Good Friday is seeded as a centre closure at Easter minus two days. Easter Monda
 
 HR records only dates and absence type for sickness, Legge 104, and parental leave. There are no diagnosis, free-text medical-detail, or document fields. Technical logs and emails contain no absence type, dates, balance, or medical detail.
 
-The department calendar is configured to show approved employee name and exact type under the organization's existing legal review. Visibility is type- and audience-configurable. HR/DPO must confirm the documented decision, retention periods, access review cadence, and processing record before launch.
+Decided on 25 August 2026 (docs/hr-cfo-open-questions.md, question 2): the department calendar shows colleagues the employee name with a generic "absent" and no type; department heads (the employee's responsabile or substitute) and HR see the exact type. Per-type visibility remains configurable — EXACT re-broadens a type for everyone, HIDDEN removes it from the department calendar for every viewer. HR/DPO must still document retention periods, access review cadence, and the processing record before launch.
 
 - [Garante workplace-calendar guidance](https://www.garanteprivacy.it/web/guest/home/docweb/-/docweb-display/docweb/10268606)
 - [GDPR data-minimization principle](https://eur-lex.europa.eu/legal-content/EN/AUTO/?uri=CELEX%3A32016R0679)
@@ -24,7 +24,7 @@ The department calendar is configured to show approved employee name and exact t
 
 Zucchetti product/API availability is contract-specific. CSV/XLSX import with preview, checksum idempotency, explicit cutoff, and reconciliation is the MVP interface. Obtain the exact product/version, field dictionary, sample exports, API terms, and future-absence inclusion semantics before considering a read-only connector.
 
-INPS sickness attestations are technically available through employer services and PEC/XML, but require employer delegation plus legal, privacy, and security review. No public employer API was identified for parental leave or Legge 104. Sistema Tessera Sanitaria is not an employer source. Authenticated portal scraping and payroll write-back are prohibited.
+INPS sickness attestations are technically available through employer services and PEC/XML, but require employer delegation plus legal, privacy, and security review. Decided on 25 August 2026 (docs/hr-cfo-open-questions.md, question 4): no INPS delegation for now — the HR lead records sickness manually in the portal. No public employer API was identified for parental leave or Legge 104. Sistema Tessera Sanitaria is not an employer source. Authenticated portal scraping and payroll write-back are prohibited.
 
 - [INPS employer sickness-attestation service](https://www.inps.it/it/it/dettaglio-scheda.it.schede-servizio-strumento.schede-servizi.consultazione-degli-attestati-di-malattia-telematici.html)
 

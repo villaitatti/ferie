@@ -2,6 +2,36 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
+## [0.4.0] - 25 August 2026
+
+Implements the HR/CFO decisions of 25 August 2026 (docs/hr-cfo-open-questions.md, questions 1, 2, 4).
+
+### Changed
+
+- Department calendar privacy now follows the decided model: colleagues see the employee's name with
+  a generic "Assente"/"Absent" and no absence type, while the employee's responsabile (or substitute)
+  and HR (final approver or portal administrator roles) see the exact type. Everyone still sees their
+  own entries in full. The per-type visibility setting in Administration keeps working as the
+  baseline: EXACT re-broadens a type for all colleagues, HIDDEN removes it from the department
+  calendar for every viewer, with no exception for HR. All seeded absence types now default to the
+  generic level, and a data migration moves existing EXACT rows to the same baseline on upgrade.
+  The sensitivity flag is masked together with the label, because the calendar colours sensitive
+  entries differently and a truthful flag would tell colleagues a generic "absent" is health- or
+  family-related.
+- The 37.5-hour full-time week (question 1) and manual HR entry of sickness with no INPS delegation
+  (question 4) are confirmed as decided and recorded in the research and launch-gates notes; neither
+  changes portal behavior, which already worked this way.
+
+## [0.3.1] - 25 August 2026
+
+### Fixed
+
+- The main content area no longer shrinks to the width of its own content: inside the sidebar layout
+  the page was exempt from the flexbox stretch because of its centring margins, so on large monitors
+  it huddled, tiny, in the middle of the screen. The page now always fills the available width, and
+  its cap grows with the viewport — 1440px on laptops, up to 1840px on desktop displays such as a
+  27-inch Studio Display — so tables never stretch absurdly wide either.
+
 ## [0.3.0] - 24 August 2026
 
 This release aligns the portal with Libra's stack so the two apps stay easy to maintain together.
