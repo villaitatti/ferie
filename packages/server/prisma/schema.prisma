@@ -144,6 +144,12 @@ model EmployeeMirror {
   // last did so, so a sync that fetched its pages before that write cannot mirror stale data back.
   preferredLanguage Language                @default(IT)
   preferredLanguageUpdatedAt DateTime?
+  // Mirrored from Employee Directory, which enforces at most one director and clears the delegation
+  // whenever the director role moves. The delegate is stored as a raw ED source id (no foreign key:
+  // the delegate's row may be upserted after the director's within the same sync); the delegate's
+  // current email is resolved from the mirror at delivery time.
+  isDirector      Boolean                   @default(false)
+  directorMailDelegateSourceId String?
   sourceUpdatedAt DateTime
   syncedAt        DateTime                  @default(now())
   requests        AbsenceRequest[]
@@ -171,6 +177,11 @@ model DirectorySyncRun {
   startedAt     DateTime   @default(now())
   finishedAt    DateTime?
   employeeCount Int        @default(0)
+  // Directory contract version the run validated against, recorded on success. Null on runs from
+  // before the director-aware contract (1.1.0): the delivery gate refuses to send any mail until a
+  // run with a version exists, because only those runs populated the director metadata the
+  // never-mail-the-director rule depends on.
+  contractVersion String?
   errorCode     String?
   errorMessage  String?
 }
@@ -382,6 +393,10 @@ model NotificationOutbox {
   payload   Json
   attempts  Int       @default(0)
   sentAt    DateTime?
+  // The director's mail is suppressed rather than delivered when no active delegate exists in the
+  // mirror. A suppressed notification is final: it is not retried once a delegate appears, because
+  // by then it would be stale — the Integrations page warns while the condition lasts.
+  suppressedAt DateTime?
   lastError String?
   createdAt DateTime  @default(now())
 }

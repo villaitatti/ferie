@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { grantedRoles, languageNotWrittenSince, newlyAssignedRecipients, superuserEmails } from "./directory.js";
 
+const person = (sourceId: string, email = `${sourceId}@example.org`) => ({ sourceId, email });
+
 describe("directory reassignment notifications", () => {
-  it("returns only recipients newly introduced by a sync", () => {
-    expect(newlyAssignedRecipients(["a@example.org", "b@example.org"], ["b@example.org", "c@example.org", "c@example.org"])).toEqual(["c@example.org"]);
-    expect(newlyAssignedRecipients(["a@example.org"], ["a@example.org"])).toEqual([]);
+  it("returns only recipients newly introduced by a sync, deduplicated", () => {
+    expect(newlyAssignedRecipients([person("a"), person("b")], [person("b"), person("c"), person("c")])).toEqual([person("c")]);
+    expect(newlyAssignedRecipients([person("a")], [person("a")])).toEqual([]);
+  });
+
+  it("identifies recipients by person, so an email change alone is not a new assignment", () => {
+    expect(newlyAssignedRecipients([person("a", "old@example.org")], [person("a", "new@example.org")])).toEqual([]);
   });
 });
 

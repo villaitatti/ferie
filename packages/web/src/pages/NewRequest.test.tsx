@@ -37,7 +37,7 @@ const me: MeResponse = {
     ]),
   },
   balances: [],
-  capabilities: { canApprove: false, canFinalApprove: false, canAdminister: false, canInspectIntegrations: false, canChangePreferredLanguage: true },
+  capabilities: { canApprove: false, canFinalApprove: false, canAdminister: false, canViewEmployeeBalances: false, canInspectIntegrations: false, canChangePreferredLanguage: true },
   pendingApprovals: 0,
 };
 

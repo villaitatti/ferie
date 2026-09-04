@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Moon, Network, Plus, Settings, Sun, type LucideIcon } from "lucide-react";
+import { CalendarCheck2, CalendarDays, CalendarRange, CheckSquare, Ellipsis, Gauge, Languages, LogOut, Moon, Network, Plus, Settings, Sun, Users, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
@@ -47,6 +47,7 @@ const RequestDetail = lazy(() => import("./pages/RequestDetail").then((module) =
 const Approvals = lazy(() => import("./pages/Approvals").then((module) => ({ default: module.Approvals })));
 const CalendarPage = lazy(() => import("./pages/CalendarPage").then((module) => ({ default: module.CalendarPage })));
 const Admin = lazy(() => import("./pages/Admin").then((module) => ({ default: module.Admin })));
+const EmployeeBalances = lazy(() => import("./pages/EmployeeBalances").then((module) => ({ default: module.EmployeeBalances })));
 const Integrations = lazy(() => import("./pages/Integrations").then((module) => ({ default: module.Integrations })));
 
 /**
@@ -242,6 +243,7 @@ function AppShell() {
     { path: "/requests", label: t("requests"), icon: CalendarRange, show: true },
     { path: "/approvals", label: t("approvals"), icon: CheckSquare, show: me.data.capabilities.canApprove || me.data.capabilities.canFinalApprove, badge: me.data.pendingApprovals },
     { path: "/calendar", label: t("calendar"), icon: CalendarDays, show: true },
+    { path: "/employees", label: t("employeeBalances"), icon: Users, show: me.data.capabilities.canViewEmployeeBalances },
     { path: "/admin", label: t("administration"), icon: Settings, show: me.data.capabilities.canAdminister },
     { path: "/integrations", label: t("integrations"), icon: Network, show: me.data.capabilities.canInspectIntegrations },
   ] satisfies Array<NavigationEntry & { show: boolean }>).filter((entry) => entry.show);
@@ -332,6 +334,7 @@ function AppShell() {
               <Route path="/requests/:id" element={<RequestDetail />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/employees" element={me.data.capabilities.canViewEmployeeBalances ? <EmployeeBalances /> : <Navigate to="/" />} />
               <Route path="/admin" element={me.data.capabilities.canAdminister ? <Admin /> : <Navigate to="/" />} />
               <Route path="/integrations" element={me.data.capabilities.canInspectIntegrations ? <Integrations /> : <Navigate to="/" />} />
               <Route path="*" element={<Navigate to="/" />} />

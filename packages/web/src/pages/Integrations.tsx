@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 interface Health {
   directory: { configured: boolean; lastSync: { status: string; startedAt: string; employeeCount: number; errorCode?: string } | null };
   auth0: { configured: boolean; mode: string };
-  email: { configured: boolean; pending: number };
+  email: { configured: boolean; pending: number; suppressed: number; directorDelegate: "NONE" | "CONFIGURED" | "MISSING" | "INACTIVE" };
   imports: { rejected: number };
 }
 
@@ -25,14 +25,25 @@ export function Integrations() {
   const health = useQuery({ queryKey: ["integrations"], queryFn: () => api<Health>("/it/integrations"), refetchInterval: 60_000 });
   const sync = useMutation({
     mutationFn: () => api("/it/directory-sync", { method: "POST" }),
-    onSuccess: async () => { toast.success(i18n.language === "en" ? "ED sync completed" : "Sincronizzazione ED completata"); await queryClient.invalidateQueries({ queryKey: ["integrations"] }); },
+    onSuccess: async () => { toast.success(t("syncCompleted")); await queryClient.invalidateQueries({ queryKey: ["integrations"] }); },
     onError: (error: Error) => toast.error(error.message),
   });
+  // MISSING/INACTIVE means the portal is suppressing the director's mail rather than delivering it,
+  // and only an Employee Directory change can resolve that — so the SES tile must demand attention.
+  const delegateWarning = health.data?.email.directorDelegate === "MISSING"
+    ? t("delegateMissing")
+    : health.data?.email.directorDelegate === "INACTIVE"
+      ? t("delegateInactive")
+      : null;
   const tiles = health.data ? [
-    { title: "Employee Directory", icon: Database, ok: health.data.directory.lastSync?.status === "SUCCEEDED", detail: health.data.directory.lastSync ? `${health.data.directory.lastSync.employeeCount} ${i18n.language === "en" ? "employees" : "dipendenti"} · ${formatPortalDateTime(health.data.directory.lastSync.startedAt, i18n.language)}` : health.data.directory.configured ? (i18n.language === "en" ? "Not synchronized" : "Non sincronizzato") : (i18n.language === "en" ? "Not configured" : "Non configurato") },
+    { title: "Employee Directory", icon: Database, ok: health.data.directory.lastSync?.status === "SUCCEEDED", detail: health.data.directory.lastSync ? `${t("employeeCount", { count: health.data.directory.lastSync.employeeCount })} · ${formatPortalDateTime(health.data.directory.lastSync.startedAt, i18n.language)}` : health.data.directory.configured ? t("notSynchronized") : t("notConfigured") },
     { title: "Auth0", icon: Shield, ok: health.data.auth0.configured || health.data.auth0.mode === "demo", detail: health.data.auth0.mode === "demo" ? "Demo authentication" : "JWT + current ED authorization" },
-    { title: "AWS SES", icon: Mail, ok: health.data.email.configured, detail: `${health.data.email.pending} ${i18n.language === "en" ? "pending notifications" : "notifiche in attesa"}` },
-    { title: "Zucchetti", icon: Cloud, ok: health.data.imports.rejected === 0, detail: `${health.data.imports.rejected} ${i18n.language === "en" ? "rejected batches" : "importazioni rifiutate"}` },
+    { title: "AWS SES", icon: Mail, ok: health.data.email.configured && !delegateWarning, detail: [
+      t("pendingNotifications", { count: health.data.email.pending }),
+      health.data.email.suppressed > 0 ? t("suppressedNotifications", { count: health.data.email.suppressed }) : null,
+      delegateWarning,
+    ].filter(Boolean).join(" · ") },
+    { title: "Zucchetti", icon: Cloud, ok: health.data.imports.rejected === 0, detail: t("rejectedBatches", { count: health.data.imports.rejected }) },
   ] : [];
 
   return <div className="flex flex-col gap-5">
@@ -47,7 +58,7 @@ export function Integrations() {
           <div className="flex items-start justify-between gap-3">
             <Icon className="size-[22px] text-muted-foreground" />
             <Badge variant="ghost" className={toneSoft[ok ? "green" : "orange"]}>
-              {ok ? (i18n.language === "en" ? "Operational" : "Operativo") : (i18n.language === "en" ? "Attention" : "Attenzione")}
+              {ok ? t("operational") : t("attention")}
             </Badge>
           </div>
           <p className="mt-6 font-bold">{title}</p>

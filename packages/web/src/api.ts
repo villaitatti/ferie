@@ -37,7 +37,7 @@ export interface DevIdentity {
 export interface MeResponse {
   employee: { id: string; displayName: string; email: string; title: string | null; departmentName: string; fte: number; roles: string[]; preferredLanguage: Language; schedule: Array<{ weekday: number; start: string; end: string }> };
   balances: BalanceSummary[];
-  capabilities: { canApprove: boolean; canFinalApprove: boolean; canAdminister: boolean; canInspectIntegrations: boolean; canChangePreferredLanguage: boolean };
+  capabilities: { canApprove: boolean; canFinalApprove: boolean; canAdminister: boolean; canViewEmployeeBalances: boolean; canInspectIntegrations: boolean; canChangePreferredLanguage: boolean };
   pendingApprovals: number;
 }
 

@@ -2,6 +2,48 @@
 
 All notable changes to the Ferie Portal are documented in this file.
 
+## [0.5.0] - 26 August 2026
+
+Establishes the email notification ground rules (docs/email-notification-rules.md): outside
+production every notification goes to a single development mailbox and never to a real user, and in
+production the director never receives portal mail — her notifications are delivered to the
+designated substitute approver instead. Other substitute approvers remain outside every
+notification audience, as before.
+
+### Added
+
+- Director mail delegation, driven by Employee Directory (time-off contract 1.1.0): the sync
+  mirrors `isDirector` and `directorMailDelegate`, and at delivery time every notification
+  addressed to the director is rerouted to the delegate's current mirrored email with the intended
+  recipient noted in the subject (`[per …]`). The outbox row keeps the intended recipient, so the
+  notification audit trail stays truthful.
+- Fail-safe suppression: when the director has no delegate — or the delegate is inactive in the
+  mirror — her mail is suppressed rather than delivered (never falling back to the director), the
+  outbox records `suppressedAt`, and the AWS SES tile on the Integrations page turns to Attention
+  with the reason and a suppressed-notification count.
+- Delivery gate for the deployment window: whenever a directory is configured, the notification
+  worker sends nothing until at least one sync has succeeded against the director-aware contract
+  (recorded as `contractVersion` on the sync run). Without it, the upgrade deployment could drain
+  queued mail to the director while every mirror row still said `isDirector = false`. Held mail is
+  delayed, never lost: pg-boss retries, and each successful sync re-drains the outbox.
+- Notifications now identify their recipient by directory source id, resolving the current email
+  and the director flag from the mirror at delivery time — so a director email change while a
+  notification sits unsent can no longer bypass delegation through a stale address. Legacy outbox
+  rows without an id fall back to matching the stored address against the director rows.
+- Employee overview for HR ("Situazione dipendenti"): final approvers and portal administrators see
+  the whole roster with each employee's remaining balances per account (ferie, ex festività,
+  permessi), pending amounts, and stale-snapshot warnings. The table is sortable (name, department,
+  each balance), searchable by name/number/department, filterable by department and active status,
+  and paginated at 50 rows with a 25/50/100/All selector and a result count. Balances are computed
+  with the same snapshot-watermark semantics as the personal dashboard, in five set-wide queries
+  for the whole roster. Adjustments from this view come later.
+
+### Changed
+
+- The copy introduced by the employee overview and the Integrations page (filters, paging, empty
+  states, tile statuses and counts, the delegate warnings) moved from inline bilingual ternaries
+  into i18next translation keys, gaining proper singular/plural forms for the integration counts.
+
 ## [0.4.0] - 25 August 2026
 
 Implements the HR/CFO decisions of 25 August 2026 (docs/hr-cfo-open-questions.md, questions 1, 2, 4).
