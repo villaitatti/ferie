@@ -28,6 +28,7 @@ import {
   assertCurrentRole,
 } from "./services/portal.js";
 import { integrationHealth, syncDirectory } from "./services/directory.js";
+import { listEmployeeBalances } from "./services/hr-overview.js";
 import { listDevIdentities } from "./services/dev-identities.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -108,5 +109,6 @@ api.post("/admin/balance-imports/file/preview", upload.single("file"), asyncHand
   }));
   response.json(await previewBalanceImport(request, { sourceName: request.file.originalname, cutoffDate: String(request.body.cutoffDate), rows }));
 }));
+api.get("/hr/employee-balances", asyncHandler(async (request, response) => { await assertCurrentRole(request, ["FERIE_PORTAL_ADMIN", "FERIE_FINAL_APPROVER"]); response.json(await listEmployeeBalances()); }));
 api.get("/it/integrations", asyncHandler(async (request, response) => { await assertCurrentRole(request, ["STAFF_IT", "FERIE_PORTAL_ADMIN"]); response.json(await integrationHealth()); }));
 api.post("/it/directory-sync", asyncHandler(async (request, response) => { await assertCurrentRole(request, ["STAFF_IT", "FERIE_PORTAL_ADMIN"]); response.status(202).json(await syncDirectory()); }));

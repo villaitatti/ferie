@@ -3,7 +3,12 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
-import { enqueueNotification } from "./queue.js";
+import { enqueueNotification, enqueuePendingNotifications, type NotificationRecipient } from "./queue.js";
+
+// Version of docs/employee-directory-openapi.yaml this sync validates against. Recorded on every
+// successful run so the notification worker's delivery gate can tell director-aware syncs (which
+// populated isDirector and the mail delegate) from runs that predate the field.
+export const DIRECTORY_CONTRACT_VERSION = "1.1.0";
 
 const employeeSchema = z.object({
   id: z.string(),
@@ -19,6 +24,8 @@ const employeeSchema = z.object({
   roles: z.array(z.enum(["FERIE_FINAL_APPROVER", "FERIE_PORTAL_ADMIN", "STAFF_IT"])),
   preferredLanguage: z.enum(LANGUAGES),
   approvers: z.array(z.object({ employeeSourceId: z.string(), role: z.enum(["PRE_APPROVER", "RESPONSABILE", "SUBSTITUTE_RESPONSABILE"]) })),
+  isDirector: z.boolean(),
+  directorMailDelegate: z.object({ employeeSourceId: z.string() }).nullable(),
   updatedAt: z.iso.datetime(),
 });
 
@@ -29,12 +36,20 @@ type PendingStage = "NORMAL" | "FINAL";
 interface PendingRecipientSet {
   requestId: string;
   stage: PendingStage;
-  recipients: string[];
+  recipients: NotificationRecipient[];
 }
 
-export function newlyAssignedRecipients(previous: string[], current: string[]): string[] {
-  const previousSet = new Set(previous);
-  return [...new Set(current)].filter((recipient) => !previousSet.has(recipient)).sort();
+function uniqueRecipients(rows: NotificationRecipient[]): NotificationRecipient[] {
+  return [...new Map(rows.map((row) => [row.sourceId, { email: row.email, sourceId: row.sourceId }])).values()].sort((a, b) => a.sourceId.localeCompare(b.sourceId));
+}
+
+/**
+ * Compared by person (directory source id), not address: an approver whose email merely changed is
+ * not newly assigned and must not be re-notified.
+ */
+export function newlyAssignedRecipients(previous: NotificationRecipient[], current: NotificationRecipient[]): NotificationRecipient[] {
+  const previousIds = new Set(previous.map((recipient) => recipient.sourceId));
+  return uniqueRecipients(current).filter((recipient) => !previousIds.has(recipient.sourceId));
 }
 
 async function pendingRecipientSets(): Promise<Map<string, PendingRecipientSet>> {
@@ -44,16 +59,16 @@ async function pendingRecipientSets(): Promise<Map<string, PendingRecipientSet>>
       include: { employee: { include: { subjects: { include: { approver: true } } } } },
     }),
     prisma.absenceRequest.findMany({ where: { status: "PENDING_FINAL_APPROVAL" }, select: { id: true } }),
-    prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true } }),
+    prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true, sourceId: true } }),
   ]);
   const result = new Map<string, PendingRecipientSet>();
   for (const request of normalPending) {
     const preApprovers = request.employee.subjects.filter((assignment) => assignment.role === "PRE_APPROVER");
     const assignments = preApprovers.length ? preApprovers : request.employee.subjects.filter((assignment) => assignment.role === "RESPONSABILE");
-    const entry = { requestId: request.id, stage: "NORMAL" as const, recipients: [...new Set(assignments.map((assignment) => assignment.approver.email))].sort() };
+    const entry = { requestId: request.id, stage: "NORMAL" as const, recipients: uniqueRecipients(assignments.map((assignment) => assignment.approver)) };
     result.set(`${entry.stage}:${entry.requestId}`, entry);
   }
-  const finalRecipients = [...new Set(finalApprovers.map((approver) => approver.email))].sort();
+  const finalRecipients = uniqueRecipients(finalApprovers);
   for (const request of finalPending) {
     const entry = { requestId: request.id, stage: "FINAL" as const, recipients: finalRecipients };
     result.set(`${entry.stage}:${entry.requestId}`, entry);
@@ -149,8 +164,8 @@ export async function syncDirectory() {
         });
         await tx.employeeMirror.upsert({
           where: { sourceId: item.id },
-          create: { sourceId: item.id, employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, preferredLanguage: item.preferredLanguage, sourceUpdatedAt: new Date(item.updatedAt) },
-          update: { employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, sourceUpdatedAt: new Date(item.updatedAt), syncedAt: new Date() },
+          create: { sourceId: item.id, employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, preferredLanguage: item.preferredLanguage, isDirector: item.isDirector, directorMailDelegateSourceId: item.directorMailDelegate?.employeeSourceId ?? null, sourceUpdatedAt: new Date(item.updatedAt) },
+          update: { employeeNumber: item.employeeNumber, auth0Subject: item.auth0Subject, email: item.workEmail, displayName: item.displayName, title: item.title, departmentId: department.id, status: item.status, fte: item.fte, schedule: item.schedule, roles, isDirector: item.isDirector, directorMailDelegateSourceId: item.directorMailDelegate?.employeeSourceId ?? null, sourceUpdatedAt: new Date(item.updatedAt), syncedAt: new Date() },
         });
         // Separate conditional write, so a language change made while this sync was fetching survives.
         await tx.employeeMirror.updateMany({
@@ -159,7 +174,9 @@ export async function syncDirectory() {
         });
       }
       const returnedIds = items.map((item) => item.id);
-      await tx.employeeMirror.updateMany({ where: { sourceId: { notIn: returnedIds } }, data: { status: "INACTIVE" } });
+      // A row the directory no longer returns also loses the director marker and its delegation,
+      // so a stale row can never shadow the current director in the delivery-time lookup.
+      await tx.employeeMirror.updateMany({ where: { sourceId: { notIn: returnedIds } }, data: { status: "INACTIVE", isDirector: false, directorMailDelegateSourceId: null } });
       await tx.approverAssignment.deleteMany();
       const employees = await tx.employeeMirror.findMany({ select: { id: true, sourceId: true } });
       const bySourceId = new Map(employees.map((employee) => [employee.sourceId, employee.id]));
@@ -180,7 +197,15 @@ export async function syncDirectory() {
         await enqueueNotification(current.requestId, recipient, template, run.id);
       }
     }
-    await prisma.directorySyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", employeeCount: items.length, finishedAt: new Date() } });
+    await prisma.directorySyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", employeeCount: items.length, contractVersion: DIRECTORY_CONTRACT_VERSION, finishedAt: new Date() } });
+    // Mail may be waiting on the delivery gate for exactly this sync (or have exhausted its pg-boss
+    // retries while waiting), so drain the outbox now rather than at the next server start. A drain
+    // failure must not turn the recorded SUCCEEDED run into a FAILED one.
+    try {
+      await enqueuePendingNotifications();
+    } catch (error) {
+      logger.error({ err: error, runId: run.id }, "Directory sync succeeded but re-enqueueing pending notifications failed");
+    }
     return { runId: run.id, employeeCount: items.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
@@ -205,16 +230,33 @@ export async function updateDirectoryPreferredLanguage(employeeSourceId: string,
   if (!response.ok) throw new Error(`ED_LANGUAGE_UPDATE_${response.status}`);
 }
 
+export type DirectorDelegateHealth = "NONE" | "CONFIGURED" | "MISSING" | "INACTIVE";
+
+/**
+ * "NONE" (no director in the mirror) is a healthy state — a demo database has no director at all.
+ * "MISSING" and "INACTIVE" are not: the portal is suppressing the director's mail rather than
+ * delivering it, and only Employee Directory can resolve that, so the tile has to say so.
+ */
+async function directorDelegateHealth(): Promise<DirectorDelegateHealth> {
+  const director = await prisma.employeeMirror.findFirst({ where: { isDirector: true }, select: { directorMailDelegateSourceId: true } });
+  if (!director) return "NONE";
+  if (!director.directorMailDelegateSourceId) return "MISSING";
+  const delegate = await prisma.employeeMirror.findUnique({ where: { sourceId: director.directorMailDelegateSourceId }, select: { status: true } });
+  return delegate?.status === "ACTIVE" ? "CONFIGURED" : "INACTIVE";
+}
+
 export async function integrationHealth() {
-  const [lastSync, unsentNotifications, failedImports] = await Promise.all([
+  const [lastSync, unsentNotifications, suppressedNotifications, failedImports, directorDelegate] = await Promise.all([
     prisma.directorySyncRun.findFirst({ orderBy: { startedAt: "desc" } }),
-    prisma.notificationOutbox.count({ where: { sentAt: null } }),
+    prisma.notificationOutbox.count({ where: { sentAt: null, suppressedAt: null } }),
+    prisma.notificationOutbox.count({ where: { suppressedAt: { not: null } } }),
     prisma.importBatch.count({ where: { status: "REJECTED" } }),
+    directorDelegateHealth(),
   ]);
   return {
     directory: { configured: Boolean(config.ED_BASE_URL), lastSync },
     auth0: { configured: !config.AUTH_DISABLED && Boolean(config.AUTH0_DOMAIN), mode: config.AUTH_DISABLED ? "demo" : "jwt" },
-    email: { configured: Boolean(config.SES_FROM_EMAIL), pending: unsentNotifications },
+    email: { configured: Boolean(config.SES_FROM_EMAIL), pending: unsentNotifications, suppressed: suppressedNotifications, directorDelegate },
     imports: { rejected: failedImports },
   };
 }

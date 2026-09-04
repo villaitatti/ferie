@@ -27,7 +27,7 @@ const me: MeResponse = {
     schedule: [{ weekday: 1, start: "09:00", end: "17:00" }],
   },
   balances: [{ code: "FERIE", labelIt: "Ferie", labelEn: "Annual leave", unit: "DAYS", imported: 18, approvedFuture: 0, pending: 0, projected: 18, available: 18, asOf: "2026-06-30", stale: false }],
-  capabilities: { canApprove: true, canFinalApprove: false, canAdminister: true, canInspectIntegrations: true, canChangePreferredLanguage: true },
+  capabilities: { canApprove: true, canFinalApprove: false, canAdminister: true, canViewEmployeeBalances: true, canInspectIntegrations: true, canChangePreferredLanguage: true },
   pendingApprovals: 2,
 };
 

@@ -77,7 +77,7 @@ DEV_SUPERUSER_EMAILS=you@itatti.harvard.edu
 MAIL_REDIRECT_TO=you@itatti.harvard.edu
 ```
 
-`ED_DEV_UNAUTHENTICATED` skips the machine-to-machine token, because a local directory accepts unauthenticated calls through its own development escape hatch. It applies to the preferred-language write as well as the read, so a local directory that only exempts reads will sync correctly while language changes fail. A sync deactivates every mirror row the directory does not return and a real directory carries no Ferie application roles, so `DEV_SUPERUSER_EMAILS` grants `STAFF_IT`, `FERIE_PORTAL_ADMIN`, and `FERIE_FINAL_APPROVER` to the listed addresses on every sync. `MAIL_REDIRECT_TO` sends every notification to a single mailbox with the intended recipient in the subject, and the outbox keeps the real recipient for the audit trail; the server refuses to start outside production when a SES sender is configured without it. All three are rejected when `NODE_ENV=production`.
+`ED_DEV_UNAUTHENTICATED` skips the machine-to-machine token, because a local directory accepts unauthenticated calls through its own development escape hatch. It applies to the preferred-language write as well as the read, so a local directory that only exempts reads will sync correctly while language changes fail. A sync deactivates every mirror row the directory does not return and a real directory carries no Ferie application roles, so `DEV_SUPERUSER_EMAILS` grants `STAFF_IT`, `FERIE_PORTAL_ADMIN`, and `FERIE_FINAL_APPROVER` to the listed addresses on every sync. `MAIL_REDIRECT_TO` sends every notification to a single mailbox with the intended recipient in the subject, and the outbox keeps the real recipient for the audit trail; the server refuses to start outside production when a SES sender is configured without it. All three are rejected when `NODE_ENV=production`. The notification ground rules — dev mail only to Andrea, no portal mail to the director in production — are recorded in `docs/email-notification-rules.md`.
 
 The identity switcher reads `GET /api/demo-identities`, which is available only while demo authentication is active.
 
@@ -89,7 +89,7 @@ Normal approval is a single peer decision, not a pre-approver-to-responsabile ch
 
 ## Production configuration
 
-Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. Register that application origin in Auth0 as an allowed callback URL, logout URL, and web origin. The server refuses to start in production with demo authentication or incomplete Auth0 JWT configuration. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
+Set `AUTH_DISABLED=false`, Auth0 domain/audience values, ED M2M credentials, a strong database password, the SES sender, and the public application URL. Per `docs/email-notification-rules.md`, the director never receives portal mail: Employee Directory marks the director and her mail delegate, the sync mirrors both, and delivery reroutes her notifications to the delegate — or suppresses them entirely (with a warning on the Integrations page) when no active delegate exists. Register that application origin in Auth0 as an allowed callback URL, logout URL, and web origin. The server refuses to start in production with demo authentication or incomplete Auth0 JWT configuration. The frontend Auth0 values are Docker build arguments because Vite embeds them at build time.
 
 Production PostgreSQL is reachable only from the Compose `internal` network. Port `5433` is published by `docker-compose.dev.yml` for local development only.
 
@@ -112,6 +112,8 @@ Preferred language is the only field the portal writes back. It needs the `write
 ### Deployment order
 
 `preferredLanguage` is required on every synchronized employee, and there is deliberately no fallback: a directory that does not yet serve the field fails the whole sync rather than guessing a language. Employee Directory must therefore ship the field and the write endpoint **before** this portal version is deployed. Until it does, `POST /api/it/directory-sync` and the scheduled sync fail with `ED_FETCH_404`, the mirror keeps its previous contents, and no employee data is lost.
+
+The same applies to the director metadata of contract 1.1.0 (`isDirector`, `directorMailDelegate`), with one extra guard: whenever a directory is configured, the notification worker sends **nothing** until at least one sync has succeeded against the director-aware contract (recorded as `contractVersion` on the sync run). This makes the deployment order safe by construction — even if the portal upgrade goes out first, queued mail is held (`DIRECTOR_METADATA_NOT_SYNCED` on the outbox row, pg-boss keeps retrying, and each successful sync re-drains the outbox) instead of being delivered to a director the mirror does not yet know about.
 
 ## Imports
 

@@ -29,6 +29,8 @@ export function installBrowserShims() {
     })),
   });
   Element.prototype.scrollIntoView = vi.fn();
+  // Base UI's ScrollArea polls viewport.getAnimations, which jsdom does not implement.
+  Element.prototype.getAnimations = vi.fn(() => []);
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
   Element.prototype.releasePointerCapture = vi.fn();

@@ -34,7 +34,7 @@ import { HttpError } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
 import { audit } from "./audit.js";
 import { directoryConfigured, updateDirectoryPreferredLanguage } from "./directory.js";
-import { enqueueNotification } from "./queue.js";
+import { enqueueNotification, type NotificationRecipient } from "./queue.js";
 
 const activeStatuses = ["PENDING_APPROVAL", "PENDING_FINAL_APPROVAL", "APPROVED", "CHANGE_REQUESTED", "CANCELLATION_REQUESTED"] as const;
 type PortalDb = typeof prisma | Prisma.TransactionClient;
@@ -94,6 +94,7 @@ export async function getMe(request: Request) {
       canApprove: pendingApprovals > 0 || await prisma.approverAssignment.count({ where: { approverId: employee.id } }) > 0,
       canFinalApprove: employee.roles.includes("FERIE_FINAL_APPROVER"),
       canAdminister: employee.roles.includes("FERIE_PORTAL_ADMIN"),
+      canViewEmployeeBalances: employee.roles.includes("FERIE_PORTAL_ADMIN") || employee.roles.includes("FERIE_FINAL_APPROVER"),
       canInspectIntegrations: employee.roles.includes("STAFF_IT") || employee.roles.includes("FERIE_PORTAL_ADMIN"),
       // Employee Directory owns the preferred language, so without one there is nothing to write to.
       canChangePreferredLanguage: directoryConfigured(),
@@ -389,14 +390,14 @@ export async function previewRequest(request: Request, raw: unknown) {
   return calculateRequestPreview(employee, input, excludeRequestId, prisma);
 }
 
-async function approverRecipients(employeeId: string): Promise<string[]> {
+async function approverRecipients(employeeId: string): Promise<NotificationRecipient[]> {
   const assignments = await prisma.approverAssignment.findMany({
     where: { employeeId },
-    include: { approver: { select: { email: true } } },
+    include: { approver: { select: { email: true, sourceId: true } } },
   });
   const preApprovers = assignments.filter((entry) => entry.role === "PRE_APPROVER");
   const recipients = preApprovers.length > 0 ? preApprovers : assignments.filter((entry) => entry.role === "RESPONSABILE");
-  return [...new Set(recipients.map((entry) => entry.approver.email))];
+  return [...new Map(recipients.map((entry) => [entry.approver.sourceId, entry.approver])).values()];
 }
 
 export async function submitRequest(request: Request, raw: unknown) {
@@ -606,9 +607,9 @@ export async function decideRequest(request: Request, id: string, raw: unknown) 
   });
   await audit(request, `REQUEST_${input.action}`, "AbsenceRequest", id, { from: outcome.fromStatus, to: outcome.toStatus });
   if (outcome.toStatus === "PENDING_FINAL_APPROVAL") {
-    const finals = await prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true } });
-    for (const final of finals) await enqueueNotification(id, final.email, "FINAL_APPROVAL_REQUIRED");
-  } else await enqueueNotification(id, existing.employee.email, `REQUEST_${outcome.toStatus}`);
+    const finals = await prisma.employeeMirror.findMany({ where: { roles: { has: "FERIE_FINAL_APPROVER" }, status: "ACTIVE" }, select: { email: true, sourceId: true } });
+    for (const final of finals) await enqueueNotification(id, final, "FINAL_APPROVAL_REQUIRED");
+  } else await enqueueNotification(id, { email: existing.employee.email, sourceId: existing.employee.sourceId }, `REQUEST_${outcome.toStatus}`);
   return serializeRequest(await getRequest(outcome.updated.id));
 }
 

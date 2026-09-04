@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Employee Directory Time-Off Contract
-  version: 1.0.0
+  version: 1.1.0
 paths:
   /api/v1/time-off-directory/employees:
     get:
@@ -87,7 +87,7 @@ components:
     TimeOffEmployee:
       type: object
       additionalProperties: false
-      required: [id, employeeNumber, auth0Subject, workEmail, displayName, department, status, fte, schedule, roles, preferredLanguage, approvers, updatedAt]
+      required: [id, employeeNumber, auth0Subject, workEmail, displayName, department, status, fte, schedule, roles, preferredLanguage, approvers, isDirector, directorMailDelegate, updatedAt]
       properties:
         id: { type: string }
         employeeNumber: { type: string }
@@ -115,4 +115,29 @@ components:
             properties:
               employeeSourceId: { type: string }
               role: { type: string, enum: [PRE_APPROVER, RESPONSABILE, SUBSTITUTE_RESPONSABILE] }
+        isDirector:
+          type: boolean
+          description: >
+            True on exactly the employee currently holding the director role (at most one ACTIVE
+            employee). Derived from the existing director role in ED, not separately editable. The
+            portal must never send an email to this person.
+        directorMailDelegate:
+          type: [object, "null"]
+          required: [employeeSourceId]
+          properties:
+            employeeSourceId:
+              type: string
+              description: >
+                The delegate's ED employee id — the same id space as `approvers[].employeeSourceId`
+                — so the portal resolves the delegate's current work email from its own mirror at
+                delivery time. Referencing by id, not email, keeps a later address change from
+                silently splitting the two systems.
+          description: >
+            Reference to the employee who receives the director's portal notifications. Non-null
+            only when isDirector is true and a delegate is configured; always null on every other
+            employee. ED clears the delegation whenever the director role leaves the person, so a
+            former director can never keep a delegate. ED does not re-null the field if the delegate
+            later becomes INACTIVE — it warns its operators instead — so the portal must fail safe
+            at delivery time: suppress the director's mail whenever the delegate is missing or
+            inactive in its mirror.
         updatedAt: { type: string, format: date-time }
